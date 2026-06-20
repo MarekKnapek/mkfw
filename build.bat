@@ -53,6 +53,7 @@ memcpy_amd64.obj ^
 /MANIFEST:EMBED,ID=1 ^
 /MANIFESTUAC:NO ^
 /MANIFESTINPUT:manifest.xml ^
+/emittoolversioninfo:no ^
 /ENTRY:mk_entry ^
 /SUBSYSTEM:WINDOWS ^
 /STACK:1048576,1048576

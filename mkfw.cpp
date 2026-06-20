@@ -362,6 +362,7 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 	x(none, "[ none ]") \
 	x(provider, "Provider") \
 	x(layer, "Layer") \
+	x(sublayer, "Sub Layer") \
 	x(wnd_cls_name_list_view, "SysListView32") \
 
 #define mk_x_guids_2() \
@@ -473,6 +474,24 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 	x(0x4b153735, 0x1049, 0x4480, 0xaa, 0xb4, 0xd1, 0xb9, 0xbd, 0xc0, 0x37, 0x10, FWPM_PROVIDER_MPSSVC_WSH) \
 	x(0x896aa19e, 0x9a34, 0x4bcb, 0xae, 0x79, 0xbe, 0xb9, 0x12, 0x7c, 0x84, 0xb9, FWPM_PROVIDER_TCP_CHIMNEY_OFFLOAD) \
 	x(0x76cfcd30, 0x3394, 0x432d, 0xbe, 0xd3, 0x44, 0x1a, 0xe5, 0x0e, 0x63, 0xc3, FWPM_PROVIDER_TCP_TEMPLATES) \
+	x(0x877519e1, 0xe6a9, 0x41a5, 0x81, 0xb4, 0x8c, 0x4f, 0x11, 0x8e, 0x4a, 0x60, FWPM_SUBLAYER_INSPECTION) \
+	x(0xe076d572, 0x5d3d, 0x48ef, 0x80, 0x2b, 0x90, 0x9e, 0xdd, 0xb0, 0x98, 0xbd, FWPM_SUBLAYER_IPSEC_DOSP) \
+	x(0xa5082e73, 0x8f71, 0x4559, 0x8a, 0x9a, 0x10, 0x1c, 0xea, 0x04, 0xef, 0x87, FWPM_SUBLAYER_IPSEC_FORWARD_OUTBOUND_TUNNEL) \
+	x(0x37a57701, 0x5884, 0x4964, 0x92, 0xb8, 0x3e, 0x70, 0x46, 0x88, 0xb0, 0xad, FWPM_SUBLAYER_IPSEC_SECURITY_REALM) \
+	x(0x83f299ed, 0x9ff4, 0x4967, 0xaf, 0xf4, 0xc3, 0x09, 0xf4, 0xda, 0xb8, 0x27, FWPM_SUBLAYER_IPSEC_TUNNEL) \
+	x(0x1b75c0ce, 0xff60, 0x4711, 0xa7, 0x0f, 0xb4, 0x95, 0x8c, 0xc3, 0xb2, 0xd0, FWPM_SUBLAYER_LIPS) \
+	x(0xffe221c3, 0x92a8, 0x4564, 0xa5, 0x9f, 0xda, 0xfb, 0x70, 0x75, 0x60, 0x20, FWPM_SUBLAYER_MPSSVC_APP_ISOLATION) \
+	x(0x09a47e38, 0xfa97, 0x471b, 0xb1, 0x23, 0x18, 0xbc, 0xd7, 0xe6, 0x50, 0x71, FWPM_SUBLAYER_MPSSVC_EDP) \
+	x(0xb3cdd441, 0xaf90, 0x41ba, 0xa7, 0x45, 0x7c, 0x60, 0x08, 0xff, 0x23, 0x02, FWPM_SUBLAYER_MPSSVC_QUARANTINE) \
+	x(0x1ec6c7e1, 0xfdd9, 0x478a, 0xb5, 0x5f, 0xff, 0x8b, 0xa1, 0xd2, 0xc1, 0x7d, FWPM_SUBLAYER_MPSSVC_TENANT_RESTRICTIONS) \
+	x(0xb3cdd441, 0xaf90, 0x41ba, 0xa7, 0x45, 0x7c, 0x60, 0x08, 0xff, 0x23, 0x01, FWPM_SUBLAYER_MPSSVC_WF) \
+	x(0xb3cdd441, 0xaf90, 0x41ba, 0xa7, 0x45, 0x7c, 0x60, 0x08, 0xff, 0x23, 0x00, FWPM_SUBLAYER_MPSSVC_WSH) \
+	x(0x758c84f4, 0xfb48, 0x4de9, 0x9a, 0xeb, 0x3e, 0xd9, 0x55, 0x1a, 0xb1, 0xfd, FWPM_SUBLAYER_RPC_AUDIT) \
+	x(0x15a66e17, 0x3f3c, 0x4f7b, 0xaa, 0x6c, 0x81, 0x2a, 0xa6, 0x13, 0xdd, 0x82, FWPM_SUBLAYER_SECURE_SOCKET) \
+	x(0x337608b9, 0xb7d5, 0x4d5f, 0x82, 0xf9, 0x36, 0x18, 0x61, 0x8b, 0xc0, 0x58, FWPM_SUBLAYER_TCP_CHIMNEY_OFFLOAD) \
+	x(0x24421dcf, 0x0ac5, 0x4caa, 0x9e, 0x14, 0x50, 0xf6, 0xe3, 0x63, 0x6a, 0xf0, FWPM_SUBLAYER_TCP_TEMPLATES) \
+	x(0xba69dc66, 0x5176, 0x4979, 0x9c, 0x89, 0x26, 0xa7, 0xb4, 0x6a, 0x83, 0x27, FWPM_SUBLAYER_TEREDO) \
+	x(0xeebecc03, 0xced4, 0x4380, 0x81, 0x9a, 0x27, 0x34, 0x39, 0x7b, 0x2b, 0x74, FWPM_SUBLAYER_UNIVERSAL) \
 
 template<typename t, size_t n>
 struct mk_view_t
@@ -947,9 +966,12 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 2, ((LPARAM)(&col))); mk_assert(lr == 2);
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_layer))); col.cx = 80;
 			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 3, ((LPARAM)(&col))); mk_assert(lr == 3);
+			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_sublayer))); col.cx = 80;
+			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 4, ((LPARAM)(&col))); mk_assert(lr == 4);
 			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
 			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 2, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 3, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 4, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 		break;
 		case WM_DESTROY:
 			g_app.m_pfn_PostQuitMessage(0);
@@ -992,6 +1014,12 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 							mk_assert(disp_info->item.iItem >= 0);
 							mk_assert(disp_info->item.iItem < ((int)(self->m_fw->m_count)));
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&self->m_fw->m_entries[disp_info->item.iItem]->layerKey)));
+						}
+						else if(disp_info->item.iSubItem == 4)
+						{
+							mk_assert(disp_info->item.iItem >= 0);
+							mk_assert(disp_info->item.iItem < ((int)(self->m_fw->m_count)));
+							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&self->m_fw->m_entries[disp_info->item.iItem]->subLayerKey)));
 						}
 						else
 						{
