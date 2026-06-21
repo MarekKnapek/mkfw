@@ -334,6 +334,8 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 	x(LoadCursorW) \
 	x(LoadIconW) \
 	x(MoveWindow) \
+	x(PeekMessageW) \
+	x(PostMessageW) \
 	x(PostQuitMessage) \
 	x(RegisterClassExW) \
 	x(SendMessageW) \
@@ -365,8 +367,24 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 	x(name, "Name") \
 	x(none, "[ none ]") \
 	x(provider, "Provider") \
+	x(questions, "???") \
 	x(sublayer, "Sub Layer") \
 	x(wnd_cls_name_list_view, "SysListView32") \
+
+#define mk_x_matches() \
+	x(FWP_MATCH_EQUAL                 , "equal"                 ) \
+	x(FWP_MATCH_GREATER               , "greater"               ) \
+	x(FWP_MATCH_LESS                  , "less"                  ) \
+	x(FWP_MATCH_GREATER_OR_EQUAL      , "greater or equal"      ) \
+	x(FWP_MATCH_LESS_OR_EQUAL         , "less or equal"         ) \
+	x(FWP_MATCH_RANGE                 , "range"                 ) \
+	x(FWP_MATCH_FLAGS_ALL_SET         , "flags all set"         ) \
+	x(FWP_MATCH_FLAGS_ANY_SET         , "flags any set"         ) \
+	x(FWP_MATCH_FLAGS_NONE_SET        , "flags none set"        ) \
+	x(FWP_MATCH_EQUAL_CASE_INSENSITIVE, "equal case insensitive") \
+	x(FWP_MATCH_NOT_EQUAL             , "not equal"             ) \
+	x(FWP_MATCH_PREFIX                , "prefix"                ) \
+	x(FWP_MATCH_NOT_PREFIX            , "not prefix"            ) \
 
 #define mk_x_guids_2() \
 	x(0xd78e1e87, 0x8644, 0x4ea5, 0x94, 0x37, 0xd8, 0x09, 0xec, 0xef, 0xc9, 0x71, FWPM_CONDITION_ALE_APP_ID) \
@@ -795,8 +813,7 @@ typedef struct guids_2_s guids_2_t;
 struct mk_guids_s
 {
 	guids_2_t m_guids;
-	int m_desc_lens[guids_2_count()];
-	int m_desc_offs[guids_2_count()];
+	signed short int m_desc_offs[guids_2_count() + 1];
 	char m_descs_str[guids_2_strs_len()];
 };
 typedef struct mk_guids_s mk_guids_t;
@@ -805,19 +822,100 @@ typedef struct mk_guids_s mk_guids_t;
 {
 	int i;
 	mk_guids_t guids;
+	int len;
 
 	i = 0;
 	guids.m_guids = guids_2_get_all();
+	guids.m_desc_offs[0] = 0;
 
 	#define x(d1, d2, d3, dd1, dd2, dd3, dd4, dd5, dd6, dd7, dd8, name) \
-		guids.m_desc_lens[i] = _countof(#name) - 1; \
-		guids.m_desc_offs[i] = ((i == 0) ? (0) : (guids.m_desc_offs[i - 1] + guids.m_desc_lens[i - 1])); \
-		std::copy(&#name[0], &#name[0] + _countof(#name) - 1, &guids.m_descs_str[0] + guids.m_desc_offs[i]); \
+		len = _countof(#name) - 1; \
+		guids.m_desc_offs[i + 1] = guids.m_desc_offs[i] + len; \
+		std::copy(&#name[0], &#name[0] + len, &guids.m_descs_str[0] + guids.m_desc_offs[i]); \
 		++i;
 	mk_x_guids_2()
 	#undef x
 
 	return guids;
+}
+
+[[nodiscard]] static inline bool matches_test(void)
+{
+	bool gud;
+	int i;
+
+	gud = true;
+	i = 0;
+
+	#define x(enm, txt) \
+		gud &= (((int)(enm)) == i); \
+		++i;
+	mk_x_matches()
+	#undef x
+
+	return gud;
+}
+
+[[nodiscard]] constexpr static inline int matches_get_count(void)
+{
+	int cnt;
+
+	cnt = 0;
+
+	#define x(enm, txt) \
+		++cnt;
+	mk_x_matches()
+	#undef x
+
+	return cnt;
+}
+
+enum matches_get_count_e { matches_get_count_v = matches_get_count() };
+
+[[nodiscard]] constexpr static inline int matches_get_texts_len(void)
+{
+	int total;
+	int len;
+
+	total = 0;
+
+	#define x(enm, txt) \
+		len = _countof(txt) - 1; \
+		total += len;
+	mk_x_matches()
+	#undef x
+
+	return total;
+}
+
+struct matches_texts_s
+{
+	unsigned char m_offs[matches_get_count() + 1];
+	char m_txt_buf[matches_get_texts_len()];
+};
+typedef struct matches_texts_s matches_texts_t;
+
+[[nodiscard]] constexpr static inline matches_texts_t matches_get_texts(void)
+{
+	int i;
+	matches_texts_t texts;
+	int len;
+
+	i = 0;
+	texts.m_offs[0] = 0;
+
+	#define x(enm, txt) \
+		len = _countof(txt) - 1; \
+		mk_assert(len >= 1); \
+		mk_assert(len <= UCHAR_MAX / 4); \
+		mk_assert(texts.m_offs[i] <= UCHAR_MAX - len); \
+		texts.m_offs[i + 1] = texts.m_offs[i] + len; \
+		std::copy(&txt[0], &txt[0] + len, &texts.m_txt_buf[0] + texts.m_offs[i]); \
+		++i;
+	mk_x_matches()
+	#undef x
+
+	return texts;
 }
 
 #define x(name) typedef decltype(&name) tfn_##name;
@@ -843,6 +941,7 @@ struct mk_konst_s
 	#undef x
 
 	mk_guids_t m_guids;
+	matches_texts_t m_matches;
 };
 typedef struct mk_konst_s mk_konst_t;
 
@@ -867,6 +966,7 @@ typedef struct mk_konst_s mk_konst_t;
 	#undef x
 
 	konst.m_guids = make_guids();
+	konst.m_matches = matches_get_texts();
 	return konst;
 }
 
@@ -885,6 +985,8 @@ struct mk_wnd_s
 	HWND m_conditions;
 	mk_fw_t* m_fw;
 	int m_entry_id;
+	int m_max_width_condition;
+	int m_max_width_match;
 };
 typedef struct mk_wnd_s mk_wnd_t;
 
@@ -1040,12 +1142,12 @@ static inline void mkfw_load_all(PPEB const peb)
 	int i;
 	GUID const* ggg;
 
-	static_assert(std::size(k_konst.m_guids.m_desc_lens) == std::size(k_konst.m_guids.m_desc_offs));
+	static_assert(std::size(k_konst.m_guids.m_guids.m_guids) + 1 == std::size(k_konst.m_guids.m_desc_offs));
 	
 	wstr = NULL;
 	if(guid)
 	{
-		n = std::size(k_konst.m_guids.m_desc_lens);
+		n = std::size(k_konst.m_guids.m_guids.m_guids);
 		for(i = 0; i != n; ++i)
 		{
 			ggg = ((GUID*)(&k_konst.m_guids.m_guids.m_guids[i]));
@@ -1058,7 +1160,7 @@ static inline void mkfw_load_all(PPEB const peb)
 		}
 		if(i != n)
 		{
-			wstr = nstr_to_wstr(&k_konst.m_guids.m_descs_str[k_konst.m_guids.m_desc_offs[i]], k_konst.m_guids.m_desc_lens[i]);
+			wstr = nstr_to_wstr(&k_konst.m_guids.m_descs_str[k_konst.m_guids.m_desc_offs[i]], k_konst.m_guids.m_desc_offs[i + 1] - k_konst.m_guids.m_desc_offs[i + 0]);
 		}
 		else
 		{
@@ -1070,6 +1172,45 @@ static inline void mkfw_load_all(PPEB const peb)
 		wstr = nstr_to_wstr(k_konst.m_nstr_none);
 	}
 	return wstr;
+}
+
+[[nodiscard]] static inline LPCWSTR match_type_to_text(FWP_MATCH_TYPE const match_type)
+{
+	int offa;
+	int offb;
+	int len;
+	LPCSTR nstr;
+	LPCWSTR wstr;
+
+	if(((int)(match_type)) >= 0 && ((int)(match_type)) < ((int)(matches_get_count_v)))
+	{
+		offa = k_konst.m_matches.m_offs[((int)(match_type)) + 0];
+		offb = k_konst.m_matches.m_offs[((int)(match_type)) + 1];
+		len = offb - offa;
+		nstr = &k_konst.m_matches.m_txt_buf[0] + offa;
+		wstr = nstr_to_wstr(nstr, len);
+	}
+	else
+	{
+		wstr = nstr_to_wstr(k_konst.m_nstr_questions);
+	}
+	return wstr;
+}
+
+static inline void set_max_col_width(HWND const hwnd, int const col_idx, int* const max_storage)
+{
+	LRESULT lr;
+
+	lr = g_app.m_pfn_SendMessageW(hwnd, LVM_SETCOLUMNWIDTH, col_idx, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+	lr = g_app.m_pfn_SendMessageW(hwnd, LVM_GETCOLUMNWIDTH, col_idx, 0); mk_assert(lr != 0);
+	if(((int)(lr)) > *max_storage)
+	{
+		*max_storage = ((int)(lr));
+	}
+	else if(((int)(lr)) < *max_storage)
+	{
+		lr = g_app.m_pfn_SendMessageW(hwnd, LVM_SETCOLUMNWIDTH, col_idx, *max_storage); mk_assert(lr != 0);
+	}
 }
 
 static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam)
@@ -1091,6 +1232,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 	NMLISTVIEW* changed;
 	int item;
 	FWPM_FILTER0* entry;
+	FWPM_FILTER_CONDITION0* condition;
 
 	call_def = true;
 	lres = 0;
@@ -1106,7 +1248,9 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			ptr = g_app.m_pfn_SetWindowLongPtrW(self->m_hwnd, GWLP_USERDATA, ((LONG_PTR)(self))); mk_assert(ptr == 0);
 
 			self->m_entry_id = 0;
-			self->m_list = g_app.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view), nstr_to_wstr(k_konst.m_nstr_empty), WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
+			self->m_max_width_condition = 10;
+			self->m_max_width_match = 10;
+			self->m_list = g_app.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view), nstr_to_wstr(k_konst.m_nstr_empty), WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
 			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_name))); col.cx = 80;
@@ -1130,7 +1274,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 3, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 4, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 
-			self->m_conditions = g_app.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view), nstr_to_wstr(k_konst.m_nstr_empty), WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
+			self->m_conditions = g_app.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view), nstr_to_wstr(k_konst.m_nstr_empty), WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
 			lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_key))); col.cx = 80;
@@ -1230,9 +1374,12 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 							item = changed->iItem;
 							self->m_entry_id = item;
 							entry = self->m_fw->m_entries[item];
+							lr = g_app.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
 							lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_SETITEMCOUNT, entry->numFilterConditions, 0); mk_assert(lr != 0);
-							lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_SETCOLUMNWIDTH, 0, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+							set_max_col_width(self->m_conditions, 0, &self->m_max_width_condition);
+							set_max_col_width(self->m_conditions, 1, &self->m_max_width_match);
 							b = g_app.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
+							lr = g_app.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						}
 					}
 				}
@@ -1242,22 +1389,22 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 				if(nm->code == LVN_GETDISPINFOW)
 				{
 					disp_info = ((NMLVDISPINFOW*)(lparam));
+					item = disp_info->item.iItem;
+					entry = self->m_fw->m_entries[self->m_entry_id];
+					condition = &entry->filterCondition[item];
+					mk_assert(item >= 0);
+					mk_assert(item < ((int)(entry->numFilterConditions)));
 					mask = disp_info->item.mask;
 					if((mask & LVIF_TEXT) != 0)
 					{
 						mask &=~ LVIF_TEXT;
 						if(disp_info->item.iSubItem == 0)
 						{
-							item = disp_info->item.iItem;
-							mk_assert(item >= 0);
-							mk_assert(item < ((int)(self->m_fw->m_entries[self->m_entry_id]->numFilterConditions)));
-							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&self->m_fw->m_entries[self->m_entry_id]->filterCondition[item].fieldKey)));
+							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&condition->fieldKey)));
 						}
 						else if(disp_info->item.iSubItem == 1)
 						{
-							mk_assert(disp_info->item.iItem >= 0);
-							mk_assert(disp_info->item.iItem < ((int)(self->m_fw->m_count)));
-							disp_info->item.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_none)));
+							disp_info->item.pszText = ((LPWSTR)(match_type_to_text(condition->matchType)));
 						}
 						else
 						{
@@ -1309,6 +1456,7 @@ extern "C" DWORD __stdcall mk_entry(PPEB const peb)
 	LRESULT lr;
 
 	mk_assert(guids_2_test());
+	mk_assert(matches_test());
 
 	mkfw_load_all(peb);
 	fw_construct(&g_app.m_fw);
@@ -1330,8 +1478,12 @@ extern "C" DWORD __stdcall mk_entry(PPEB const peb)
 	b = g_app.m_pfn_ShowWindow(hwnd, SW_SHOWDEFAULT); ((void)(b));
 	for(;;)
 	{
-		b = g_app.m_pfn_GetMessageW(&msg, NULL, 0, 0); mk_assert((b == TRUE) || (b == FALSE && msg.message == WM_QUIT));
+		b = g_app.m_pfn_PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE);
 		if(!b)
+		{
+			b = g_app.m_pfn_GetMessageW(&msg, NULL, 0, 0); mk_assert((b == TRUE) || (b == FALSE && msg.message == WM_QUIT));
+		}
+		if(msg.message == WM_QUIT)
 		{
 			break;
 		}
