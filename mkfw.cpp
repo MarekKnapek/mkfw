@@ -369,6 +369,7 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 	x(provider, "Provider") \
 	x(questions, "???") \
 	x(sublayer, "Sub Layer") \
+	x(value, "Value") \
 	x(wnd_cls_name_list_view, "SysListView32") \
 
 #define mk_x_matches() \
@@ -385,6 +386,30 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 	x(FWP_MATCH_NOT_EQUAL             , "not equal"             ) \
 	x(FWP_MATCH_PREFIX                , "prefix"                ) \
 	x(FWP_MATCH_NOT_PREFIX            , "not prefix"            ) \
+
+#define mk_x_types() \
+	x(FWP_EMPTY                        , "FWP_EMPTY"                        ) \
+	x(FWP_UINT8                        , "FWP_UINT8"                        ) \
+	x(FWP_UINT16                       , "FWP_UINT16"                       ) \
+	x(FWP_UINT32                       , "FWP_UINT32"                       ) \
+	x(FWP_UINT64                       , "FWP_UINT64"                       ) \
+	x(FWP_INT8                         , "FWP_INT8"                         ) \
+	x(FWP_INT16                        , "FWP_INT16"                        ) \
+	x(FWP_INT32                        , "FWP_INT32"                        ) \
+	x(FWP_INT64                        , "FWP_INT64"                        ) \
+	x(FWP_FLOAT                        , "FWP_FLOAT"                        ) \
+	x(FWP_DOUBLE                       , "FWP_DOUBLE"                       ) \
+	x(FWP_BYTE_ARRAY16_TYPE            , "FWP_BYTE_ARRAY16_TYPE"            ) \
+	x(FWP_BYTE_BLOB_TYPE               , "FWP_BYTE_BLOB_TYPE"               ) \
+	x(FWP_SID                          , "FWP_SID"                          ) \
+	x(FWP_SECURITY_DESCRIPTOR_TYPE     , "FWP_SECURITY_DESCRIPTOR_TYPE"     ) \
+	x(FWP_TOKEN_INFORMATION_TYPE       , "FWP_TOKEN_INFORMATION_TYPE"       ) \
+	x(FWP_TOKEN_ACCESS_INFORMATION_TYPE, "FWP_TOKEN_ACCESS_INFORMATION_TYPE") \
+	x(FWP_UNICODE_STRING_TYPE          , "FWP_UNICODE_STRING_TYPE"          ) \
+	x(FWP_BYTE_ARRAY6_TYPE             , "FWP_BYTE_ARRAY6_TYPE"             ) \
+	x(FWP_V4_ADDR_MASK                 , "FWP_V4_ADDR_MASK"                 ) \
+	x(FWP_V6_ADDR_MASK                 , "FWP_V6_ADDR_MASK"                 ) \
+	x(FWP_RANGE_TYPE                   , "FWP_RANGE_TYPE"                   ) \
 
 #define mk_x_guids_2() \
 	x(0xd78e1e87, 0x8644, 0x4ea5, 0x94, 0x37, 0xd8, 0x09, 0xec, 0xef, 0xc9, 0x71, FWPM_CONDITION_ALE_APP_ID) \
@@ -870,8 +895,6 @@ typedef struct mk_guids_s mk_guids_t;
 	return cnt;
 }
 
-enum matches_get_count_e { matches_get_count_v = matches_get_count() };
-
 [[nodiscard]] constexpr static inline int matches_get_texts_len(void)
 {
 	int total;
@@ -888,10 +911,13 @@ enum matches_get_count_e { matches_get_count_v = matches_get_count() };
 	return total;
 }
 
+enum matches_get_count_e { matches_get_count_v = matches_get_count() };
+enum matches_get_texts_len_e { matches_get_texts_len_v = matches_get_texts_len() };
+
 struct matches_texts_s
 {
-	unsigned char m_offs[matches_get_count() + 1];
-	char m_txt_buf[matches_get_texts_len()];
+	unsigned char m_offs[matches_get_count_v + 1];
+	char m_txt_buf[matches_get_texts_len_v];
 };
 typedef struct matches_texts_s matches_texts_t;
 
@@ -913,6 +939,85 @@ typedef struct matches_texts_s matches_texts_t;
 		std::copy(&txt[0], &txt[0] + len, &texts.m_txt_buf[0] + texts.m_offs[i]); \
 		++i;
 	mk_x_matches()
+	#undef x
+
+	return texts;
+}
+
+[[nodiscard]] static inline bool types_test(void)
+{
+	bool gud;
+	int i;
+
+	gud = true;
+	i = 0;
+
+	#define x(enm, txt) \
+		++i;
+	mk_x_types()
+	#undef x
+
+	return gud;
+}
+
+[[nodiscard]] constexpr static inline int types_get_count(void)
+{
+	int cnt;
+
+	cnt = 0;
+
+	#define x(enm, txt) \
+		++cnt;
+	mk_x_types()
+	#undef x
+
+	return cnt;
+}
+
+[[nodiscard]] constexpr static inline int types_get_texts_len(void)
+{
+	int total;
+	int len;
+
+	total = 0;
+
+	#define x(enm, txt) \
+		len = _countof(txt) - 1; \
+		total += len;
+	mk_x_types()
+	#undef x
+
+	return total;
+}
+
+enum types_get_count_e { types_get_count_v = types_get_count() };
+enum types_get_texts_len_e { types_get_texts_len_v = types_get_texts_len() };
+
+struct types_texts_s
+{
+	signed short int m_offs[types_get_count_v + 1];
+	char m_txt_buf[types_get_texts_len_v];
+};
+typedef struct types_texts_s types_texts_t;
+
+[[nodiscard]] constexpr static inline types_texts_t types_get_texts(void)
+{
+	int i;
+	types_texts_t texts;
+	int len;
+
+	i = 0;
+	texts.m_offs[0] = 0;
+
+	#define x(enm, txt) \
+		len = _countof(txt) - 1; \
+		mk_assert(len >= 1); \
+		mk_assert(len <= SHORT_MAX / 4); \
+		mk_assert(texts.m_offs[i] <= SHORT_MAX - len); \
+		texts.m_offs[i + 1] = texts.m_offs[i] + len; \
+		std::copy(&txt[0], &txt[0] + len, &texts.m_txt_buf[0] + texts.m_offs[i]); \
+		++i;
+	mk_x_types()
 	#undef x
 
 	return texts;
@@ -942,6 +1047,7 @@ struct mk_konst_s
 
 	mk_guids_t m_guids;
 	matches_texts_t m_matches;
+	types_texts_t m_types;
 };
 typedef struct mk_konst_s mk_konst_t;
 
@@ -967,6 +1073,7 @@ typedef struct mk_konst_s mk_konst_t;
 
 	konst.m_guids = make_guids();
 	konst.m_matches = matches_get_texts();
+	konst.m_types = types_get_texts();
 	return konst;
 }
 
@@ -987,6 +1094,7 @@ struct mk_wnd_s
 	int m_entry_id;
 	int m_max_width_condition;
 	int m_max_width_match;
+	int m_max_width_value;
 };
 typedef struct mk_wnd_s mk_wnd_t;
 
@@ -1197,6 +1305,40 @@ static inline void mkfw_load_all(PPEB const peb)
 	return wstr;
 }
 
+[[nodiscard]] static inline LPCWSTR type_to_text(FWP_DATA_TYPE const type)
+{
+	int idx;
+	int i;
+	int offa;
+	int offb;
+	int len;
+	LPCSTR nstr;
+	LPCWSTR wstr;
+
+	idx = 0;
+	i = 0;
+
+	#define x(enm, txt) \
+		if(type == enm){ idx = i; } \
+		++i;
+	mk_x_types()
+	#undef x
+
+	if(idx != 0)
+	{
+		offa = k_konst.m_types.m_offs[idx + 0];
+		offb = k_konst.m_types.m_offs[idx + 1];
+		len = offb - offa;
+		nstr = &k_konst.m_types.m_txt_buf[0] + offa;
+		wstr = nstr_to_wstr(nstr, len);
+	}
+	else
+	{
+		wstr = nstr_to_wstr(k_konst.m_nstr_questions);
+	}
+	return wstr;
+}
+
 static inline void set_max_col_width(HWND const hwnd, int const col_idx, int* const max_storage)
 {
 	LRESULT lr;
@@ -1250,6 +1392,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			self->m_entry_id = 0;
 			self->m_max_width_condition = 10;
 			self->m_max_width_match = 10;
+			self->m_max_width_value = 10;
 			self->m_list = g_app.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view), nstr_to_wstr(k_konst.m_nstr_empty), WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
 			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
@@ -1282,6 +1425,9 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_match_type))); col.cx = 80;
 			lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 1, ((LPARAM)(&col))); mk_assert(lr == 1);
+
+			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_value))); col.cx = 80;
+			lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 2, ((LPARAM)(&col))); mk_assert(lr == 2);
 		break;
 		case WM_DESTROY:
 			g_app.m_pfn_PostQuitMessage(0);
@@ -1378,6 +1524,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 							lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_SETITEMCOUNT, entry->numFilterConditions, 0); mk_assert(lr != 0);
 							set_max_col_width(self->m_conditions, 0, &self->m_max_width_condition);
 							set_max_col_width(self->m_conditions, 1, &self->m_max_width_match);
+							set_max_col_width(self->m_conditions, 2, &self->m_max_width_value);
 							b = g_app.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
 							lr = g_app.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						}
@@ -1405,6 +1552,10 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						else if(disp_info->item.iSubItem == 1)
 						{
 							disp_info->item.pszText = ((LPWSTR)(match_type_to_text(condition->matchType)));
+						}
+						else if(disp_info->item.iSubItem == 2)
+						{
+							disp_info->item.pszText = ((LPWSTR)(type_to_text(condition->conditionValue.type)));
 						}
 						else
 						{
@@ -1457,6 +1608,7 @@ extern "C" DWORD __stdcall mk_entry(PPEB const peb)
 
 	mk_assert(guids_2_test());
 	mk_assert(matches_test());
+	mk_assert(types_test());
 
 	mkfw_load_all(peb);
 	fw_construct(&g_app.m_fw);
