@@ -455,6 +455,7 @@ template<typename t, size_t n>
 	x(filter_type_callout, "Filer Type / Callout") \
 	x(fire_wall, "FireWall") \
 	x(fmt_arr16, "[%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x]") \
+	x(fmt_ipv4, "%d.%d.%d.%d") \
 	x(fmt_u16, "0x%04x (%d)") \
 	x(fmt_u32, "0x%08x (%d)") \
 	x(fmt_u64, "0x%016llx (%lld)") \
@@ -464,6 +465,21 @@ template<typename t, size_t n>
 	x(mkfw, "mkfw") \
 	x(name, "Name") \
 	x(none, "[ none ]") \
+	x(note, "Note") \
+	x(protocol_gre, "GRE") \
+	x(protocol_icmpv4, "ICMPv4") \
+	x(protocol_icmpv6, "ICMPv6") \
+	x(protocol_igmp, "IGMP") \
+	x(protocol_ipv6frag, "IPv6-Frag") \
+	x(protocol_ipv6generic, "IPv6") \
+	x(protocol_ipv6nonxt, "IPv6-NoNxt") \
+	x(protocol_ipv6opts, "IPv6-Opts") \
+	x(protocol_ipv6route, "IPv6-Route") \
+	x(protocol_l2tp, "L2TP") \
+	x(protocol_pgm, "PGM") \
+	x(protocol_tcp, "TCP") \
+	x(protocol_udp, "UDP") \
+	x(protocol_vrrp, "VRRP") \
 	x(provider, "Provider") \
 	x(questions, "???") \
 	x(range_from, "From: ") \
@@ -865,6 +881,16 @@ template<typename t, size_t n>
 	return eq;
 }
 
+enum guid_id_e
+{
+	#define x(d1, d2, d3, dd1, dd2, dd3, dd4, dd5, dd6, dd7, dd8, name) \
+		guid_id_e_##name,
+	mk_x_guids_2()
+	#undef x
+	guid_id_e_dummy_end
+};
+typedef enum guid_id_e guid_id_t;
+
 [[nodiscard]] constexpr static inline int guids_2_count(void)
 {
 	int i;
@@ -996,6 +1022,11 @@ typedef struct mk_guids_s mk_guids_t;
 	#undef x
 
 	return guids;
+}
+
+[[nodiscard]] static inline bool guid_eq(GUID const* const a, guid_2_t const* const b)
+{
+	return guid_eq(a, ((GUID const*)(b)));
 }
 
 [[nodiscard]] static inline bool matches_test(void)
@@ -1307,6 +1338,7 @@ enum mk_col_id_condition_e
 	mk_col_id_condition_e_match_type,
 	mk_col_id_condition_e_value_type,
 	mk_col_id_condition_e_value_data,
+	mk_col_id_condition_e_note,
 	mk_col_id_condition_e_dummy_end
 };
 typedef enum mk_col_id_condition_e mk_col_id_condition_t;
@@ -1341,6 +1373,7 @@ struct mk_wnd_s
 	int m_max_width_condition_field;
 	int m_max_width_condition_match_type;
 	int m_max_width_condition_value_type;
+	int m_max_width_condition_note;
 };
 typedef struct mk_wnd_s mk_wnd_t;
 
@@ -2223,6 +2256,71 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
+static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
+{
+	int n;
+	int i;
+
+	mk_assert(arr4);
+
+	n = 4;
+	for(i = 0; i != n; ++i)
+	{
+		arr4[(n - 1) - i] = ((unsigned char)((u32 >> (i * CHAR_BIT)) & 0xff));
+	}
+}
+
+[[nodiscard]] static inline mk_view_t<CHAR, 0> ip_address_v4_to_nstr(UINT32 const u32)
+{
+	char* fmt;
+	char* buf;
+	int cap;
+	unsigned char parts[4];
+	int len;
+	mk_view_t<CHAR, 0> nstr;
+
+	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+	cap = _countof(g_app.m_tmp_nstrs[0]);
+	std::memcpy(&fmt[0], k_konst.m_nstr_fmt_ipv4.data(), k_konst.m_nstr_fmt_ipv4.size());
+	fmt[k_konst.m_nstr_fmt_ipv4.size()] = '\0';
+	u32_to_arr4(u32, &parts[0]);
+	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], parts[3]); mk_assert(len >= 1); mk_assert(len < cap);
+	nstr.m_buf = buf;
+	nstr.m_len = len;
+	mk_assert(nstr.m_len >= 0);
+	mk_assert(nstr.m_buf[nstr.m_len] == '\0');
+	return nstr;
+}
+
+[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_note(FWPM_FILTER_CONDITION0 const* const condition)
+{
+	mk_view_t<WCHAR, 0> wstr;
+
+	mk_assert(condition);
+
+	wstr = nstr_to_wstr(k_konst.m_nstr_empty);
+	if(false){}
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==   1)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_icmpv4     ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==   2)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_igmp       ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==   6)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_tcp        ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  17)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_udp        ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  41)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_ipv6generic); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  43)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_ipv6route  ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  44)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_ipv6frag   ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  47)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_gre        ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  58)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_icmpv6     ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  59)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_ipv6nonxt  ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  60)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_ipv6opts   ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 112)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_vrrp       ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 113)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_pgm        ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 115)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_l2tp       ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_UINT32)){ wstr = nstr_to_wstr(ip_address_v4_to_nstr(condition->conditionValue.uint32)); }
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
 [[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_any(FWPM_FILTER_CONDITION0 const* const condition, mk_col_id_condition_t const col_id)
 {
 	mk_view_t<WCHAR, 0> wstr;
@@ -2237,6 +2335,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 		case mk_col_id_condition_e_match_type: wstr = condition_entry_to_wstr_match_type(condition); break;
 		case mk_col_id_condition_e_value_type: wstr = condition_entry_to_wstr_value_type(condition); break;
 		case mk_col_id_condition_e_value_data: wstr = condition_entry_to_wstr_value_data(condition); break;
+		case mk_col_id_condition_e_note      : wstr = condition_entry_to_wstr_note      (condition); break;
 		case mk_col_id_entry_e_dummy_end: mk_assert(false); break;
 		default: mk_assert(false); break;
 	}
@@ -2417,6 +2516,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			self->m_max_width_condition_field = 10;
 			self->m_max_width_condition_match_type = 10;
 			self->m_max_width_condition_value_type = 10;
+			self->m_max_width_condition_note = 10;
 			if(!self->m_sort_ints)
 			{
 				n = ((int)(self->m_fw->m_count));
@@ -2484,6 +2584,9 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_value).m_buf)); col.cx = 200;
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_value_data, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_value_data);
+
+			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_note).m_buf)); col.cx = 200;
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_note, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_note);
 		break;
 		case WM_DESTROY:
 			g_app.m_funcs_user.m_pfn_PostQuitMessage(0);
@@ -2578,6 +2681,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						set_max_col_width(self->m_conditions, mk_col_id_condition_e_field, &self->m_max_width_condition_field);
 						set_max_col_width(self->m_conditions, mk_col_id_condition_e_match_type, &self->m_max_width_condition_match_type);
 						set_max_col_width(self->m_conditions, mk_col_id_condition_e_value_type, &self->m_max_width_condition_value_type);
+						set_max_col_width(self->m_conditions, mk_col_id_condition_e_note, &self->m_max_width_condition_note);
 						b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						b = g_app.m_funcs_user.m_pfn_UpdateWindow(self->m_conditions); mk_assert(b);
