@@ -302,6 +302,8 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 	return proc;
 }
 
+#define mk_min(a, b)((b)<(a)?(b):(a))
+
 template<typename t, size_t n>
 struct mk_view_t
 {
@@ -377,11 +379,15 @@ template<typename t, size_t n>
 #define mk_x_ntdll_funcs() \
 	x(_snprintf) \
 	x(memset) \
+	x(qsort) \
 	x(wcslen) \
+	x(wcsncmp) \
 
 #define mk_x_kernel_funcs() \
 	x(ExitProcess) \
 	x(GetModuleHandleW) \
+	x(GetProcessHeap) \
+	x(HeapAlloc) \
 	x(LoadLibraryExA) \
 	x(LocalFree) \
 
@@ -1321,6 +1327,8 @@ struct mk_wnd_s
 	mk_fw_t* m_fw;
 	mk_wnd_sub_window_id_t m_last_sub_window_focus;
 	int m_entry_id;
+	int m_entries_sort_col;
+	int* m_sort_ints;
 	int m_max_width_entry_filter;
 	int m_max_width_entry_provider;
 	int m_max_width_entry_layer;
@@ -1533,6 +1541,24 @@ template<size_t nn>
 	buf[i] = L'\0';
 	wstr.m_buf = buf;
 	wstr.m_len = n;
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline mk_view_t<WCHAR, 0> wstr_to_wstr(LPCWSTR const win_str)
+{
+	mk_view_t<WCHAR, 0> wstr;
+
+	if(win_str)
+	{
+		wstr.m_buf = win_str;
+		wstr.m_len = g_app.m_funcs_ntdll.m_pfn_wcslen(win_str);
+	}
+	else
+	{
+		wstr = nstr_to_wstr(k_konst.m_nstr_empty);
+	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
 	return wstr;
@@ -2120,6 +2146,138 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return nstr_to_wstr(action_type_to_nstr(action_type));
 }
 
+[[nodiscard]] static inline mk_view_t<WCHAR, 0> entry_to_wstr(FWPM_FILTER0 const* const entry, mk_col_id_entry_t const col_id)
+{
+	mk_view_t<WCHAR, 0> wstr;
+
+	mk_assert(entry);
+	mk_assert(col_id >= 0);
+	mk_assert(col_id < mk_col_id_entry_e_dummy_end);
+
+	switch(col_id)
+	{
+		case mk_col_id_entry_e_filter          : wstr = guid_to_text(&entry->filterKey)                      ; break;
+		case mk_col_id_entry_e_name            : wstr = wstr_to_wstr(entry->displayData.name)                ; break;
+		case mk_col_id_entry_e_description     : wstr = wstr_to_wstr(entry->displayData.description)         ; break;
+		case mk_col_id_entry_e_provider        : wstr = guid_to_text(entry->providerKey)                     ; break;
+		case mk_col_id_entry_e_layer           : wstr = guid_to_text(&entry->layerKey)                       ; break;
+		case mk_col_id_entry_e_sub_layer       : wstr = guid_to_text(&entry->subLayerKey)                    ; break;
+		case mk_col_id_entry_e_action          : wstr = action_type_to_wstr(entry->action.type)              ; break;
+		case mk_col_id_entry_e_callout         : wstr = guid_to_text_not_null(&entry->action.calloutKey)     ; break;
+		case mk_col_id_entry_e_id              : wstr = nstr_to_wstr(value_to_nstr_uint64(&entry->filterId)) ; break;
+		case mk_col_id_entry_e_weight          : wstr = value_to_wstr_value(&entry->weight)                  ; break;
+		case mk_col_id_entry_e_effective_weight: wstr = value_to_wstr_value(&entry->effectiveWeight)         ; break;
+		case mk_col_id_entry_e_dummy_end: mk_assert(false); break;
+		default: mk_assert(false); break;
+	}
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline int __cdecl sort_compare_entries(void const* const a, void const* const b)
+{
+	int aa;
+	int bb;
+	mk_wnd_t* win;
+	int sort_col;
+	FWPM_FILTER0 const* entry_a;
+	FWPM_FILTER0 const* entry_b;
+	bool direction;
+	mk_col_id_entry_t col_id;
+	mk_view_t<WCHAR, 0> txt_a;
+	mk_view_t<WCHAR, 0> txt_b;
+	mk_view_t<WCHAR, 0>* txt_aa;
+	mk_view_t<WCHAR, 0>* txt_bb;
+	int cmp;
+
+	mk_assert(a);
+	mk_assert(b);
+
+	aa = *((int const*)(a));
+	bb = *((int const*)(b));
+	win = &g_app.m_fw_wnd;
+	sort_col = win->m_entries_sort_col;
+	mk_assert(sort_col != 0);
+	entry_a = win->m_fw->m_entries[aa];
+	entry_b = win->m_fw->m_entries[bb];
+	if(sort_col > 0)
+	{
+		direction = true;
+		col_id = ((mk_col_id_entry_t)(sort_col - 1));
+	}
+	else
+	{
+		direction = false;
+		col_id = ((mk_col_id_entry_t)((-sort_col) - 1));
+	}
+	entry_a = win->m_fw->m_entries[aa];
+	entry_b = win->m_fw->m_entries[bb];
+	txt_a = entry_to_wstr(entry_a, col_id);
+	txt_b = entry_to_wstr(entry_b, col_id);
+	txt_aa = direction ? &txt_a : &txt_b;
+	txt_bb = direction ? &txt_b : &txt_a;
+	cmp = g_app.m_funcs_ntdll.m_pfn_wcsncmp(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
+	return cmp;
+}
+
+static inline void sort_entries(void)
+{
+	mk_wnd_t* win;
+	HWND hdr_win;
+	int n;
+	int i;
+	HDITEMW hdr_item;
+	BOOL b;
+	int sort_col;
+	bool direction;
+	mk_col_id_entry_t col_id;
+
+	win = &g_app.m_fw_wnd;
+	mk_assert(win->m_sort_ints);
+	hdr_win = ((HWND)(g_app.m_funcs_user.m_pfn_SendMessageW(win->m_entries, LVM_GETHEADER, 0, 0))); mk_assert(hdr_win);
+	n = ((int)(mk_col_id_entry_e_dummy_end));
+	for(i = 0; i != n; ++i)
+	{
+		hdr_item.mask = HDI_FORMAT;
+		b = ((BOOL)(g_app.m_funcs_user.m_pfn_SendMessageW(hdr_win, HDM_GETITEM, i, ((LPARAM)(&hdr_item))))); mk_assert(b);
+		hdr_item.fmt &=~ ((unsigned int)(HDF_SORTDOWN | HDF_SORTUP));
+		hdr_item.mask = HDI_FORMAT;
+		b = ((BOOL)(g_app.m_funcs_user.m_pfn_SendMessageW(hdr_win, HDM_SETITEM, i, ((LPARAM)(&hdr_item))))); mk_assert(b);
+	}
+	sort_col = win->m_entries_sort_col;
+	if(sort_col > 0)
+	{
+		direction = true;
+		col_id = ((mk_col_id_entry_t)(sort_col - 1));
+	}
+	else
+	{
+		direction = false;
+		col_id = ((mk_col_id_entry_t)((-sort_col) - 1));
+	}
+	n = ((int)(win->m_fw->m_count));
+	if(sort_col != 0)
+	{
+		hdr_item.mask = HDI_FORMAT;
+		b = ((BOOL)(g_app.m_funcs_user.m_pfn_SendMessageW(hdr_win, HDM_GETITEM, col_id, ((LPARAM)(&hdr_item))))); mk_assert(b);
+		hdr_item.fmt &=~ ((unsigned int)(HDF_SORTDOWN | HDF_SORTUP));
+		hdr_item.fmt |= ((unsigned int)(direction ? HDF_SORTUP : HDF_SORTDOWN));
+		hdr_item.mask = HDI_FORMAT;
+		b = ((BOOL)(g_app.m_funcs_user.m_pfn_SendMessageW(hdr_win, HDM_SETITEM, col_id, ((LPARAM)(&hdr_item))))); mk_assert(b);
+		g_app.m_funcs_ntdll.m_pfn_qsort(win->m_sort_ints, n, sizeof(int), &sort_compare_entries);
+	}
+	else
+	{
+		for(i = 0; i != n; ++i)
+		{
+			win->m_sort_ints[i] = i;
+		}
+	}
+	b = g_app.m_funcs_user.m_pfn_InvalidateRect(hdr_win, NULL, TRUE); mk_assert(b);
+	b = g_app.m_funcs_user.m_pfn_InvalidateRect(win->m_entries, NULL, TRUE); mk_assert(b);
+}
+
 static inline void set_max_col_width(HWND const hwnd, int const col_idx, int* const max_storage)
 {
 	LRESULT lr;
@@ -2142,21 +2300,24 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 	LRESULT lres;
 	LONG_PTR ptr;
 	mk_wnd_t* self;
-	CREATESTRUCTW* crt;
+	LPCREATESTRUCTW crt;
+	int n;
+	int i;
 	LRESULT lr;
 	LVCOLUMNW col;
 	BOOL b;
 	RECT rect;
 	int height;
 	int top;
-	NMHDR* nm;
-	NMLVDISPINFOW* disp_info;
+	HWND wnd;
+	LPNMHDR nm;
+	LPNMLVDISPINFOW disp_info;
 	UINT mask;
-	NMLISTVIEW* changed;
 	int item;
 	FWPM_FILTER0* entry;
+	mk_col_id_entry_t col_id;
+	LPNMLISTVIEW changed;
 	FWPM_FILTER_CONDITION0* condition;
-	HWND wnd;
 
 	call_def = true;
 	lres = 0;
@@ -2166,13 +2327,15 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 	{
 		case WM_CREATE:
 			mk_assert(lparam);
-			crt = ((CREATESTRUCTW*)(lparam));
+			crt = ((LPCREATESTRUCTW)(lparam));
 			self = ((mk_wnd_t*)(crt->lpCreateParams));
 			self->m_hwnd = hwnd;
 			ptr = g_app.m_funcs_user.m_pfn_SetWindowLongPtrW(self->m_hwnd, GWLP_USERDATA, ((LONG_PTR)(self))); mk_assert(ptr == 0);
 
 			self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_entries;
 			self->m_entry_id = 0;
+			self->m_entries_sort_col = 0;
+			self->m_sort_ints = NULL;
 			self->m_max_width_entry_filter = 10;
 			self->m_max_width_entry_provider = 10;
 			self->m_max_width_entry_layer = 10;
@@ -2185,6 +2348,16 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			self->m_max_width_condition_field = 10;
 			self->m_max_width_condition_match_type = 10;
 			self->m_max_width_condition_value_type = 10;
+			if(!self->m_sort_ints)
+			{
+				n = ((int)(self->m_fw->m_count));
+				self->m_sort_ints = ((int*)(g_app.m_funcs_kernel.m_pfn_HeapAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, n * sizeof(int)))); mk_assert(self->m_sort_ints);
+				for(i = 0; i != n; ++i)
+				{
+					self->m_sort_ints[i] = i;
+				}
+			}
+
 			self->m_entries = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_entries);
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP); ((void)(lr));
 
@@ -2269,68 +2442,24 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			}
 		break;
 		case WM_NOTIFY:
-			nm = ((NMHDR*)(lparam));
+			nm = ((LPNMHDR)(lparam));
 			if(nm->hwndFrom == self->m_entries)
 			{
 				if(nm->code == LVN_GETDISPINFOW)
 				{
-					disp_info = ((NMLVDISPINFOW*)(lparam));
+					disp_info = ((LPNMLVDISPINFOW)(lparam));
 					mask = disp_info->item.mask;
 					if((mask & LVIF_TEXT) != 0)
 					{
+						mask &=~ LVIF_TEXT;
 						item = disp_info->item.iItem;
 						mk_assert(item >= 0);
 						mk_assert(item < ((int)(self->m_fw->m_count)));
-						entry = self->m_fw->m_entries[item];
-						mask &=~ LVIF_TEXT;
-						if(false){}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_filter)
+						entry = self->m_fw->m_entries[self->m_sort_ints[item]];
+						if(disp_info->item.iSubItem >= 0 && disp_info->item.iSubItem < mk_col_id_entry_e_dummy_end)
 						{
-							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&entry->filterKey).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_name)
-						{
-							disp_info->item.pszText = entry->displayData.name;
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_description)
-						{
-							disp_info->item.pszText = entry->displayData.description;
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_provider)
-						{
-							disp_info->item.pszText = ((LPWSTR)(guid_to_text(entry->providerKey).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_layer)
-						{
-							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&entry->layerKey).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_sub_layer)
-						{
-							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&entry->subLayerKey).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_action)
-						{
-							disp_info->item.pszText = ((LPWSTR)(action_type_to_wstr(entry->action.type).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_callout)
-						{
-							disp_info->item.pszText = ((LPWSTR)(guid_to_text_not_null(&entry->action.calloutKey).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_id)
-						{
-							disp_info->item.pszText = ((LPWSTR)(nstr_to_wstr(value_to_nstr_uint64(&entry->filterId)).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_weight)
-						{
-							disp_info->item.pszText = ((LPWSTR)(value_to_wstr_value(&entry->weight).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_entry_e_effective_weight)
-						{
-							disp_info->item.pszText = ((LPWSTR)(value_to_wstr_value(&entry->effectiveWeight).m_buf));
-						}
-						else
-						{
-							mk_assert(false);
+							col_id = ((mk_col_id_entry_t)(disp_info->item.iSubItem));
+							disp_info->item.pszText = ((LPWSTR)(entry_to_wstr(entry, col_id).m_buf));
 						}
 						if(!disp_info->item.pszText)
 						{
@@ -2360,7 +2489,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 				else if(nm->code == LVN_ITEMCHANGED)
 				{
 					self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_entries;
-					changed = ((NMLISTVIEW*)(nm));
+					changed = ((LPNMLISTVIEW)(nm));
 					if((changed->iItem != -1) && ((changed->uNewState & LVIS_SELECTED) != 0))
 					{
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
@@ -2378,7 +2507,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						mk_assert(item >= 0);
 						mk_assert(item < ((int)(self->m_fw->m_count)));
 						self->m_entry_id = item;
-						entry = self->m_fw->m_entries[item];
+						entry = self->m_fw->m_entries[self->m_sort_ints[item]];
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETITEMCOUNT, entry->numFilterConditions, 0); mk_assert(lr != 0);
 						set_max_col_width(self->m_conditions, mk_col_id_condition_e_field, &self->m_max_width_condition_field);
@@ -2389,14 +2518,39 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						b = g_app.m_funcs_user.m_pfn_UpdateWindow(self->m_conditions); mk_assert(b);
 					}
 				}
+				else if(nm->code == LVN_COLUMNCLICK)
+				{
+					changed = ((LPNMLISTVIEW)(nm));
+					if(changed->iItem == -1)
+					{
+						item = changed->iSubItem;
+						if(item >= 0 && item < mk_col_id_entry_e_dummy_end)
+						{
+							if(self->m_entries_sort_col == item + 1)
+							{
+								self->m_entries_sort_col = -(item + 1);
+							}
+							else if(self->m_entries_sort_col == -(item + 1))
+							{
+								self->m_entries_sort_col = 0;
+							}
+							else
+							{
+								self->m_entries_sort_col = item + 1;
+							}
+						}
+						sort_entries();
+					}
+				}
 			}
 			else if(nm->hwndFrom == self->m_conditions)
 			{
 				if(nm->code == LVN_GETDISPINFOW)
 				{
-					disp_info = ((NMLVDISPINFOW*)(lparam));
+					disp_info = ((LPNMLVDISPINFOW)(lparam));
+					item = self->m_entry_id;
+					entry = self->m_fw->m_entries[self->m_sort_ints[item]];
 					item = disp_info->item.iItem;
-					entry = self->m_fw->m_entries[self->m_entry_id];
 					condition = &entry->filterCondition[item];
 					mk_assert(item >= 0);
 					mk_assert(item < ((int)(entry->numFilterConditions)));
