@@ -1257,7 +1257,7 @@ typedef enum mk_wnd_sub_window_id_e mk_wnd_sub_window_id_t;
 struct mk_wnd_s
 {
 	HWND m_hwnd;
-	HWND m_list;
+	HWND m_entries;
 	HWND m_conditions;
 	mk_fw_t* m_fw;
 	mk_wnd_sub_window_id_t m_last_sub_window_focus;
@@ -2079,38 +2079,38 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			self->m_max_width_condition_field = 10;
 			self->m_max_width_condition_match_type = 10;
 			self->m_max_width_condition_value_type = 10;
-			self->m_list = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP); ((void)(lr));
+			self->m_entries = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_entries);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_filter).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_filter, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_filter);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_filter, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_filter);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_name).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_name, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_name);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_name, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_name);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_description).m_buf)); col.cx = 180;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_description, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_description);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_description, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_description);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_provider).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_provider, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_provider);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_provider, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_provider);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_layer).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_layer, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_layer);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_layer, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_layer);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_sublayer).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_sub_layer, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_sub_layer);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_sub_layer, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_sub_layer);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_action).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_action, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_action);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_action, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_action);
 
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
 
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_filter, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_provider, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_sub_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_filter, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_provider, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_sub_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 
-			self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
+			self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_entries);
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_field).m_buf)); col.cx = 80;
@@ -2133,14 +2133,14 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			height = rect.bottom / 2 - 2;
 			height = height < 0 ? 0 : height;
 			top = height + 2 * 2;
-			b = g_app.m_funcs_user.m_pfn_MoveWindow(self->m_list, 0, 0, rect.right, height, TRUE); mk_assert(b);
+			b = g_app.m_funcs_user.m_pfn_MoveWindow(self->m_entries, 0, 0, rect.right, height, TRUE); mk_assert(b);
 			b = g_app.m_funcs_user.m_pfn_MoveWindow(self->m_conditions, 0, top, rect.right, height, TRUE); mk_assert(b);
 		break;
 		case WM_SETFOCUS:
 			wnd = NULL;
 			switch(self->m_last_sub_window_focus)
 			{
-				case mk_wnd_sub_window_id_e_entries: wnd = self->m_list; break;
+				case mk_wnd_sub_window_id_e_entries: wnd = self->m_entries; break;
 				case mk_wnd_sub_window_id_e_conditions: wnd = self->m_conditions; break;
 				case mk_wnd_sub_window_id_e_dummy_end: wnd = NULL; break;
 				default: wnd = NULL; break;
@@ -2152,7 +2152,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 		break;
 		case WM_NOTIFY:
 			nm = ((NMHDR*)(lparam));
-			if(nm->hwndFrom == self->m_list)
+			if(nm->hwndFrom == self->m_entries)
 			{
 				if(nm->code == LVN_GETDISPINFOW)
 				{
@@ -2229,13 +2229,13 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 					changed = ((NMLISTVIEW*)(nm));
 					if((changed->iItem != -1) && ((changed->uNewState & LVIS_SELECTED) != 0))
 					{
-						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
-						set_max_col_width(self->m_list, mk_cols_entry_e_filter, &self->m_max_width_entry_filter);
-						set_max_col_width(self->m_list, mk_cols_entry_e_provider, &self->m_max_width_entry_provider);
-						set_max_col_width(self->m_list, mk_cols_entry_e_layer, &self->m_max_width_entry_layer);
-						set_max_col_width(self->m_list, mk_cols_entry_e_sub_layer, &self->m_max_width_entry_sub_layer);
-						set_max_col_width(self->m_list, mk_cols_entry_e_action, &self->m_max_width_entry_action);
-						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
+						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
+						set_max_col_width(self->m_entries, mk_cols_entry_e_filter, &self->m_max_width_entry_filter);
+						set_max_col_width(self->m_entries, mk_cols_entry_e_provider, &self->m_max_width_entry_provider);
+						set_max_col_width(self->m_entries, mk_cols_entry_e_layer, &self->m_max_width_entry_layer);
+						set_max_col_width(self->m_entries, mk_cols_entry_e_sub_layer, &self->m_max_width_entry_sub_layer);
+						set_max_col_width(self->m_entries, mk_cols_entry_e_action, &self->m_max_width_entry_action);
+						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						item = changed->iItem;
 						mk_assert(item >= 0);
 						mk_assert(item < ((int)(self->m_fw->m_count)));
