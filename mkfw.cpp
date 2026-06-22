@@ -419,6 +419,7 @@ template<typename t, size_t n>
 	x(SetWindowLongPtrW) \
 	x(ShowWindow) \
 	x(TranslateMessage) \
+	x(UpdateWindow) \
 
 #define mk_x_comctl_funcs() \
 	x(InitCommonControls) \
@@ -502,14 +503,14 @@ template<typename t, size_t n>
 	x(FWP_RANGE_TYPE                   , "FWP_RANGE_TYPE"                   ) \
 
 #define mk_x_action_types() \
-	x(FWP_ACTION_BLOCK) \
-	x(FWP_ACTION_CALLOUT_INSPECTION) \
-	x(FWP_ACTION_CALLOUT_TERMINATING) \
-	x(FWP_ACTION_CALLOUT_UNKNOWN) \
-	x(FWP_ACTION_CONTINUE) \
-	x(FWP_ACTION_NONE) \
-	x(FWP_ACTION_NONE_NO_MATCH) \
-	x(FWP_ACTION_PERMIT) \
+	x(FWP_ACTION_BLOCK              , "FWP_ACTION_BLOCK"              ) \
+	x(FWP_ACTION_CALLOUT_INSPECTION , "FWP_ACTION_CALLOUT_INSPECTION" ) \
+	x(FWP_ACTION_CALLOUT_TERMINATING, "FWP_ACTION_CALLOUT_TERMINATING") \
+	x(FWP_ACTION_CALLOUT_UNKNOWN    , "FWP_ACTION_CALLOUT_UNKNOWN"    ) \
+	x(FWP_ACTION_CONTINUE           , "FWP_ACTION_CONTINUE"           ) \
+	x(FWP_ACTION_NONE               , "FWP_ACTION_NONE"               ) \
+	x(FWP_ACTION_NONE_NO_MATCH      , "FWP_ACTION_NONE_NO_MATCH"      ) \
+	x(FWP_ACTION_PERMIT             , "FWP_ACTION_PERMIT"             ) \
 
 #define mk_x_guids_2() \
 	x(0xd78e1e87, 0x8644, 0x4ea5, 0x94, 0x37, 0xd8, 0x09, 0xec, 0xef, 0xc9, 0x71, FWPM_CONDITION_ALE_APP_ID) \
@@ -1094,6 +1095,69 @@ typedef struct types_texts_s types_texts_t;
 	return texts;
 }
 
+[[nodiscard]] constexpr static inline int action_types_get_count(void)
+{
+	int cnt;
+
+	cnt = 0;
+
+	#define x(name, str) \
+		++cnt;
+	mk_x_action_types()
+	#undef x
+
+	return cnt;
+}
+
+[[nodiscard]] constexpr static inline int action_types_get_texts_len(void)
+{
+	int total;
+	int len;
+
+	total = 0;
+
+	#define x(name, str) \
+		len = _countof(str) - 1; \
+		total += len;
+	mk_x_action_types()
+	#undef x
+
+	return total;
+}
+
+enum action_types_get_count_e { action_types_get_count_v = action_types_get_count() };
+enum action_types_get_texts_len_e { action_types_get_texts_len_v = action_types_get_texts_len() };
+
+struct action_types_texts_s
+{
+	signed short int m_offs[action_types_get_count_v + 1];
+	char m_txt_buf[action_types_get_texts_len_v];
+};
+typedef struct action_types_texts_s action_types_texts_t;
+
+[[nodiscard]] constexpr static inline action_types_texts_t action_types_get_texts(void)
+{
+	int i;
+	action_types_texts_t texts;
+	int len;
+
+	i = 0;
+	texts.m_offs[0] = 0;
+
+	#define x(name, str) \
+		len = _countof(str) - 1; \
+		mk_assert(len >= 1); \
+		mk_assert(len <= SHORT_MAX / 4); \
+		mk_assert(texts.m_offs[i] <= SHORT_MAX - len); \
+		texts.m_offs[i + 1] = texts.m_offs[i] + len; \
+		std::copy(&str[0], &str[0] + len, &texts.m_txt_buf[0] + texts.m_offs[i]); \
+		++i;
+	mk_x_action_types()
+	#undef x
+
+	return texts;
+}
+
 #define x(name) typedef decltype(&name) tfn_##name;
 mk_x_all_funcs()
 #undef x
@@ -1119,6 +1183,7 @@ struct mk_konst_s
 	mk_guids_t m_guids;
 	matches_texts_t m_matches;
 	types_texts_t m_types;
+	action_types_texts_t m_action_types;
 };
 typedef struct mk_konst_s mk_konst_t;
 
@@ -1145,6 +1210,7 @@ typedef struct mk_konst_s mk_konst_t;
 	konst.m_guids = make_guids();
 	konst.m_matches = matches_get_texts();
 	konst.m_types = types_get_texts();
+	konst.m_action_types = action_types_get_texts();
 	return konst;
 }
 
@@ -1900,12 +1966,17 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 {
 	int idx;
 	int i;
+	int offa;
+	int offb;
+	int len;
+	char const* bufa;
+	char* bufb;
 	mk_view_t<CHAR, 0> nstr;
 
 	idx = -1;
 	i = 0;
 
-	#define x(name) \
+	#define x(name, str) \
 		if(action_type == name){ idx = i; } \
 		++i;
 	mk_x_action_types()
@@ -1913,7 +1984,15 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	if(idx != -1)
 	{
-		nstr = value_to_nstr_uint32(action_type);
+		offa = k_konst.m_action_types.m_offs[idx + 0];
+		offb = k_konst.m_action_types.m_offs[idx + 1];
+		len = offb - offa;
+		bufa = &k_konst.m_action_types.m_txt_buf[offa];
+		bufb = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		std::memcpy(bufb, bufa, len);
+		bufb[len] = '\0';
+		nstr.m_buf = bufb;
+		nstr.m_len = len;
 	}
 	else
 	{
@@ -2142,6 +2221,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						set_max_col_width(self->m_conditions, mk_cols_condition_e_value_type, &self->m_max_width_condition_value_type);
 						b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
+						b = g_app.m_funcs_user.m_pfn_UpdateWindow(self->m_conditions); mk_assert(b);
 					}
 				}
 			}
