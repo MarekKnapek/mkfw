@@ -367,6 +367,7 @@ template<typename t, size_t n>
 
 #define mk_x_ntdll_funcs() \
 	x(_snprintf) \
+	x(memset) \
 	x(wcslen) \
 
 #define mk_x_kernel_funcs() \
@@ -377,6 +378,7 @@ template<typename t, size_t n>
 
 #define mk_x_advapi_funcs() \
 	x(ConvertSecurityDescriptorToStringSecurityDescriptorW) \
+	x(ConvertSidToStringSidW) \
 
 #define mk_x_combase_funcs() \
 	x(StringFromGUID2) \
@@ -1162,8 +1164,8 @@ struct mk_app_s
 	mk_wnd_t m_fw_wnd;
 	UINT m_tmps_nstr_idx;
 	UINT m_tmps_wstr_idx;
-	CHAR m_tmp_nstrs[8][64];
-	WCHAR m_tmp_wstrs[8][4 * 1024];
+	CHAR m_tmp_nstrs[32][32 * 1024];
+	WCHAR m_tmp_wstrs[32][32 * 1024];
 };
 typedef struct mk_app_s mk_app_t;
 
@@ -1355,6 +1357,9 @@ static inline void mkfw_load_all(PPEB const peb)
 
 	g_app.m_pfn_InitCommonControls();
 	g_app.m_dll_exe = g_app.m_pfn_GetModuleHandleW(NULL);
+
+	g_app.m_pfn_memset(g_app.m_tmp_nstrs, 0x00, sizeof(g_app.m_tmp_nstrs));
+	g_app.m_pfn_memset(g_app.m_tmp_wstrs, 0x00, sizeof(g_app.m_tmp_wstrs));
 }
 
 [[nodiscard]] static inline mk_view_t<WCHAR, 0> guid_to_text(GUID const* const guid)
@@ -1666,12 +1671,12 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	mk_assert(sid);
 
-	b = ConvertSidToStringSidW(((PSID)(sid)), &txt_sid); mk_assert(b);
+	b = g_app.m_pfn_ConvertSidToStringSidW(((PSID)(sid)), &txt_sid); mk_assert(b);
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	len = g_app.m_pfn_wcslen(txt_sid);
 	ptr = mk_memcpy(buf, txt_sid, len); ((void)(ptr));
 	buf[len] = L'\0';
-	hloc = LocalFree(txt_sid); mk_assert(!hloc);
+	hloc = g_app.m_pfn_LocalFree(txt_sid); mk_assert(!hloc);
 	wstr.m_buf = buf;
 	wstr.m_len = len;
 	mk_assert(wstr.m_len >= 0);
@@ -1741,7 +1746,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> value_to_text(FWP_CONDITION_VALUE0 const* const value)
+[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_value_to_text(FWP_CONDITION_VALUE0 const* const value)
 {
 	mk_view_t<WCHAR, 0> wstr;
 
@@ -2004,7 +2009,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						}
 						else if(disp_info->item.iSubItem == 3)
 						{
-							disp_info->item.pszText = ((LPWSTR)(value_to_text(&condition->conditionValue).m_buf));
+							disp_info->item.pszText = ((LPWSTR)(condition_value_to_text(&condition->conditionValue).m_buf));
 						}
 						else
 						{
