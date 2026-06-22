@@ -2175,6 +2175,76 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
+[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_filed(FWPM_FILTER_CONDITION0 const* const condition)
+{
+	mk_view_t<WCHAR, 0> wstr;
+
+	mk_assert(condition);
+
+	wstr = guid_to_text(&condition->fieldKey);
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_match_type(FWPM_FILTER_CONDITION0 const* const condition)
+{
+	mk_view_t<WCHAR, 0> wstr;
+
+	mk_assert(condition);
+
+	wstr = match_type_to_text(condition->matchType);
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_value_type(FWPM_FILTER_CONDITION0 const* const condition)
+{
+	mk_view_t<WCHAR, 0> wstr;
+
+	mk_assert(condition);
+
+	wstr = type_to_text(condition->conditionValue.type);
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_value_data(FWPM_FILTER_CONDITION0 const* const condition)
+{
+	mk_view_t<WCHAR, 0> wstr;
+
+	mk_assert(condition);
+
+	wstr = condition_value_to_text(&condition->conditionValue);
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_any(FWPM_FILTER_CONDITION0 const* const condition, mk_col_id_condition_t const col_id)
+{
+	mk_view_t<WCHAR, 0> wstr;
+
+	mk_assert(condition);
+	mk_assert(col_id >= 0);
+	mk_assert(col_id < mk_col_id_condition_e_dummy_end);
+
+	switch(col_id)
+	{
+		case mk_col_id_condition_e_field     : wstr = condition_entry_to_wstr_filed     (condition); break;
+		case mk_col_id_condition_e_match_type: wstr = condition_entry_to_wstr_match_type(condition); break;
+		case mk_col_id_condition_e_value_type: wstr = condition_entry_to_wstr_value_type(condition); break;
+		case mk_col_id_condition_e_value_data: wstr = condition_entry_to_wstr_value_data(condition); break;
+		case mk_col_id_entry_e_dummy_end: mk_assert(false); break;
+		default: mk_assert(false); break;
+	}
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
 [[nodiscard]] static inline int __cdecl sort_compare_entries(void const* const a, void const* const b)
 {
 	int aa;
@@ -2315,7 +2385,6 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 	UINT mask;
 	int item;
 	FWPM_FILTER0* entry;
-	mk_col_id_entry_t col_id;
 	LPNMLISTVIEW changed;
 	FWPM_FILTER_CONDITION0* condition;
 
@@ -2456,11 +2525,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						mk_assert(item >= 0);
 						mk_assert(item < ((int)(self->m_fw->m_count)));
 						entry = self->m_fw->m_entries[self->m_sort_ints[item]];
-						if(disp_info->item.iSubItem >= 0 && disp_info->item.iSubItem < mk_col_id_entry_e_dummy_end)
-						{
-							col_id = ((mk_col_id_entry_t)(disp_info->item.iSubItem));
-							disp_info->item.pszText = ((LPWSTR)(entry_to_wstr(entry, col_id).m_buf));
-						}
+						disp_info->item.pszText = ((LPWSTR)(entry_to_wstr(entry, ((mk_col_id_entry_t)(disp_info->item.iSubItem))).m_buf));
 						if(!disp_info->item.pszText)
 						{
 							disp_info->item.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_empty).m_buf));
@@ -2558,26 +2623,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 					if((mask & LVIF_TEXT) != 0)
 					{
 						mask &=~ LVIF_TEXT;
-						if(disp_info->item.iSubItem == mk_col_id_condition_e_field)
-						{
-							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&condition->fieldKey).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_condition_e_match_type)
-						{
-							disp_info->item.pszText = ((LPWSTR)(match_type_to_text(condition->matchType).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_condition_e_value_type)
-						{
-							disp_info->item.pszText = ((LPWSTR)(type_to_text(condition->conditionValue.type).m_buf));
-						}
-						else if(disp_info->item.iSubItem == mk_col_id_condition_e_value_data)
-						{
-							disp_info->item.pszText = ((LPWSTR)(condition_value_to_text(&condition->conditionValue).m_buf));
-						}
-						else
-						{
-							mk_assert(false);
-						}
+						disp_info->item.pszText = ((LPWSTR)(condition_entry_to_wstr_any(condition, ((mk_col_id_condition_t)(disp_info->item.iSubItem))).m_buf));
 						if(!disp_info->item.pszText)
 						{
 							disp_info->item.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_empty).m_buf));
