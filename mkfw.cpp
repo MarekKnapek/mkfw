@@ -358,6 +358,15 @@ template<typename t, size_t n>
 	return mk_memcpy(dst, src.m_buf, src.m_len);
 }
 
+#define mk_x_dlls_all() \
+	x(ntdll)\
+	x(kernel32)\
+	x(advapi32)\
+	x(combase)\
+	x(fwpuclnt)\
+	x(user32)\
+	x(comctl32)\
+
 #define mk_x_dlls_to_load() \
 	x(advapi32)\
 	x(combase)\
@@ -1148,6 +1157,62 @@ struct mk_wnd_s
 };
 typedef struct mk_wnd_s mk_wnd_t;
 
+struct mk_funcs_ntdll_s
+{
+	#define x(name) tfn_##name m_pfn_##name;
+	mk_x_ntdll_funcs()
+	#undef x
+};
+typedef struct mk_funcs_ntdll_s mk_funcs_ntdll_t;
+
+struct mk_funcs_kernel_s
+{
+	#define x(name) tfn_##name m_pfn_##name;
+	mk_x_kernel_funcs()
+	#undef x
+};
+typedef struct mk_funcs_kernel_s mk_funcs_kernel_t;
+
+struct mk_funcs_advapi_s
+{
+	#define x(name) tfn_##name m_pfn_##name;
+	mk_x_advapi_funcs()
+	#undef x
+};
+typedef struct mk_funcs_advapi_s mk_funcs_advapi_t;
+
+struct mk_funcs_combase_s
+{
+	#define x(name) tfn_##name m_pfn_##name;
+	mk_x_combase_funcs()
+	#undef x
+};
+typedef struct mk_funcs_combase_s mk_funcs_combase_t;
+
+struct mk_funcs_fw_s
+{
+	#define x(name) tfn_##name m_pfn_##name;
+	mk_x_fw_funcs()
+	#undef x
+};
+typedef struct mk_funcs_fw_s mk_funcs_fw_t;
+
+struct mk_funcs_user_s
+{
+	#define x(name) tfn_##name m_pfn_##name;
+	mk_x_user_funcs()
+	#undef x
+};
+typedef struct mk_funcs_user_s mk_funcs_user_t;
+
+struct mk_funcs_comctl_s
+{
+	#define x(name) tfn_##name m_pfn_##name;
+	mk_x_comctl_funcs()
+	#undef x
+};
+typedef struct mk_funcs_comctl_s mk_funcs_comctl_t;
+
 struct mk_app_s
 {
 	PPEB m_peb;
@@ -1157,9 +1222,13 @@ struct mk_app_s
 	#define x(name) HMODULE m_dll_##name;
 	mk_x_dlls_to_load()
 	#undef x
-	#define x(name) tfn_##name m_pfn_##name;
-	mk_x_all_funcs()
-	#undef x
+	mk_funcs_ntdll_t m_funcs_ntdll;
+	mk_funcs_kernel_t m_funcs_kernel;
+	mk_funcs_advapi_t m_funcs_advapi;
+	mk_funcs_combase_t m_funcs_combase;
+	mk_funcs_fw_t m_funcs_fw;
+	mk_funcs_user_t m_funcs_user;
+	mk_funcs_comctl_t m_funcs_comctl;
 	mk_fw_t m_fw;
 	mk_wnd_t m_fw_wnd;
 	UINT m_tmps_nstr_idx;
@@ -1183,10 +1252,10 @@ static inline void fw_construct(mk_fw_t* const fw)
 
 	mk_assert(fw);
 
-	dw = g_app.m_pfn_FwpmEngineOpen0(NULL, RPC_C_AUTHN_DEFAULT, NULL, NULL, &fw->m_eng); mk_assert(dw == ERROR_SUCCESS);
-	dw = g_app.m_pfn_FwpmFilterCreateEnumHandle0(fw->m_eng, NULL, &enm); mk_assert(dw == ERROR_SUCCESS);
-	dw = g_app.m_pfn_FwpmFilterEnum0(fw->m_eng, enm, k_count, &fw->m_entries, &fw->m_count); mk_assert(dw == ERROR_SUCCESS);
-	dw = g_app.m_pfn_FwpmFilterDestroyEnumHandle0(fw->m_eng, enm); mk_assert(dw == ERROR_SUCCESS);
+	dw = g_app.m_funcs_fw.m_pfn_FwpmEngineOpen0(NULL, RPC_C_AUTHN_DEFAULT, NULL, NULL, &fw->m_eng); mk_assert(dw == ERROR_SUCCESS);
+	dw = g_app.m_funcs_fw.m_pfn_FwpmFilterCreateEnumHandle0(fw->m_eng, NULL, &enm); mk_assert(dw == ERROR_SUCCESS);
+	dw = g_app.m_funcs_fw.m_pfn_FwpmFilterEnum0(fw->m_eng, enm, k_count, &fw->m_entries, &fw->m_count); mk_assert(dw == ERROR_SUCCESS);
+	dw = g_app.m_funcs_fw.m_pfn_FwpmFilterDestroyEnumHandle0(fw->m_eng, enm); mk_assert(dw == ERROR_SUCCESS);
 }
 
 static inline void fw_destroy(mk_fw_t* const fw)
@@ -1195,8 +1264,8 @@ static inline void fw_destroy(mk_fw_t* const fw)
 
 	mk_assert(fw);
 
-	g_app.m_pfn_FwpmFreeMemory0(((void**)(&fw->m_entries)));
-	dw = g_app.m_pfn_FwpmEngineClose0(fw->m_eng); mk_assert(dw == ERROR_SUCCESS);
+	g_app.m_funcs_fw.m_pfn_FwpmFreeMemory0(((void**)(&fw->m_entries)));
+	dw = g_app.m_funcs_fw.m_pfn_FwpmEngineClose0(fw->m_eng); mk_assert(dw == ERROR_SUCCESS);
 }
 
 [[nodiscard]] static inline auto nstr_to_nstr(LPCSTR const nstr, int const len)
@@ -1307,7 +1376,7 @@ template<typename t, size_t n>
 
 	cap = _countof(g_app.m_tmp_wstrs[0]);
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_pfn_StringFromGUID2(*guid, buf, cap); mk_assert(len >= 1); mk_assert(len < cap);
+	len = g_app.m_funcs_combase.m_pfn_StringFromGUID2(*guid, buf, cap); mk_assert(len >= 1); mk_assert(len < cap);
 	wstr.m_buf = buf;
 	wstr.m_len = len;
 	mk_assert(wstr.m_len >= 0);
@@ -1323,43 +1392,43 @@ static inline void mkfw_load_all(PPEB const peb)
 	g_app.m_dll_ntdll = find_module(peb, k_konst.m_hash_ntdll); mk_assert(g_app.m_dll_ntdll);
 	g_app.m_dll_kernel = find_module(peb, k_konst.m_hash_kernel32dll); mk_assert(g_app.m_dll_kernel);
 
-	#define x(name) g_app.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_ntdll, k_konst.m_hash_##name))); mk_assert(g_app.m_pfn_##name);
+	#define x(name) g_app.m_funcs_ntdll.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_ntdll, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_ntdll.m_pfn_##name);
 	mk_x_ntdll_funcs()
 	#undef x
 
-	#define x(name) g_app.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_kernel, k_konst.m_hash_##name))); mk_assert(g_app.m_pfn_##name);
+	#define x(name) g_app.m_funcs_kernel.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_kernel, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_kernel.m_pfn_##name);
 	mk_x_kernel_funcs()
 	#undef x
 
-	#define x(name) g_app.m_dll_##name = g_app.m_pfn_LoadLibraryExA(nstr_to_nstr(k_konst.m_nstr_##name), NULL, LOAD_LIBRARY_SEARCH_SYSTEM32); mk_assert(g_app.m_dll_##name);
+	#define x(name) g_app.m_dll_##name = g_app.m_funcs_kernel.m_pfn_LoadLibraryExA(nstr_to_nstr(k_konst.m_nstr_##name), NULL, LOAD_LIBRARY_SEARCH_SYSTEM32); mk_assert(g_app.m_dll_##name);
 	mk_x_dlls_to_load()
 	#undef x
 
-	#define x(name) g_app.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_advapi32, k_konst.m_hash_##name))); mk_assert(g_app.m_pfn_##name);
+	#define x(name) g_app.m_funcs_advapi.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_advapi32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_advapi.m_pfn_##name);
 	mk_x_advapi_funcs()
 	#undef x
 
-	#define x(name) g_app.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_combase, k_konst.m_hash_##name))); mk_assert(g_app.m_pfn_##name);
+	#define x(name) g_app.m_funcs_combase.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_combase, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_combase.m_pfn_##name);
 	mk_x_combase_funcs()
 	#undef x
 
-	#define x(name) g_app.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_fwpuclnt, k_konst.m_hash_##name))); mk_assert(g_app.m_pfn_##name);
+	#define x(name) g_app.m_funcs_fw.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_fwpuclnt, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_fw.m_pfn_##name);
 	mk_x_fw_funcs()
 	#undef x
 
-	#define x(name) g_app.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_user32, k_konst.m_hash_##name))); mk_assert(g_app.m_pfn_##name);
+	#define x(name) g_app.m_funcs_user.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_user32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_user.m_pfn_##name);
 	mk_x_user_funcs()
 	#undef x
 
-	#define x(name) g_app.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_comctl32, k_konst.m_hash_##name))); mk_assert(g_app.m_pfn_##name);
+	#define x(name) g_app.m_funcs_comctl.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_comctl32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_comctl.m_pfn_##name);
 	mk_x_comctl_funcs()
 	#undef x
 
-	g_app.m_pfn_InitCommonControls();
-	g_app.m_dll_exe = g_app.m_pfn_GetModuleHandleW(NULL);
+	g_app.m_funcs_comctl.m_pfn_InitCommonControls();
+	g_app.m_dll_exe = g_app.m_funcs_kernel.m_pfn_GetModuleHandleW(NULL);
 
-	g_app.m_pfn_memset(g_app.m_tmp_nstrs, 0x00, sizeof(g_app.m_tmp_nstrs));
-	g_app.m_pfn_memset(g_app.m_tmp_wstrs, 0x00, sizeof(g_app.m_tmp_wstrs));
+	g_app.m_funcs_ntdll.m_pfn_memset(g_app.m_tmp_nstrs, 0x00, sizeof(g_app.m_tmp_nstrs));
+	g_app.m_funcs_ntdll.m_pfn_memset(g_app.m_tmp_wstrs, 0x00, sizeof(g_app.m_tmp_wstrs));
 }
 
 [[nodiscard]] static inline mk_view_t<WCHAR, 0> guid_to_text(GUID const* const guid)
@@ -1476,7 +1545,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	cap = _countof(g_app.m_tmp_nstrs[0]);
 	std::memcpy(&fmt[0], k_konst.m_nstr_fmt_u8.data(), k_konst.m_nstr_fmt_u8.size());
 	fmt[k_konst.m_nstr_fmt_u8.size()] = '\0';
-	len = g_app.m_pfn__snprintf(buf, cap, fmt, ((int)(u8)), ((int)(u8))); mk_assert(len >= 1); mk_assert(len < cap);
+	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, ((int)(u8)), ((int)(u8))); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
 	view.m_len = len;
 	return view;
@@ -1495,7 +1564,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	cap = _countof(g_app.m_tmp_nstrs[0]);
 	std::memcpy(&fmt[0], k_konst.m_nstr_fmt_u16.data(), k_konst.m_nstr_fmt_u16.size());
 	fmt[k_konst.m_nstr_fmt_u16.size()] = '\0';
-	len = g_app.m_pfn__snprintf(buf, cap, fmt, ((int)(u16)), ((int)(u16))); mk_assert(len >= 1); mk_assert(len < cap);
+	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, ((int)(u16)), ((int)(u16))); mk_assert(len >= 1); mk_assert(len < cap);
 	buf[len] = '\0';
 	view.m_buf = buf;
 	view.m_len = len;
@@ -1517,7 +1586,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	cap = _countof(g_app.m_tmp_nstrs[0]);
 	std::memcpy(&fmt[0], k_konst.m_nstr_fmt_u32.data(), k_konst.m_nstr_fmt_u32.size());
 	fmt[k_konst.m_nstr_fmt_u32.size()] = '\0';
-	len = g_app.m_pfn__snprintf(buf, cap, fmt, *((unsigned int*)(&u32)), *((unsigned int*)(&u32))); mk_assert(len >= 1); mk_assert(len < cap);
+	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, *((unsigned int*)(&u32)), *((unsigned int*)(&u32))); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
 	view.m_len = len;
 	return view;
@@ -1538,7 +1607,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	cap = _countof(g_app.m_tmp_nstrs[0]);
 	std::memcpy(&fmt[0], k_konst.m_nstr_fmt_u64.data(), k_konst.m_nstr_fmt_u64.size());
 	fmt[k_konst.m_nstr_fmt_u64.size()] = '\0';
-	len = g_app.m_pfn__snprintf(buf, cap, fmt, *((unsigned long long*)(u64)), *((unsigned long long*)(u64))); mk_assert(len >= 1); mk_assert(len < cap);
+	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, *((unsigned long long*)(u64)), *((unsigned long long*)(u64))); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
 	view.m_len = len;
 	return view;
@@ -1630,7 +1699,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	std::memcpy(&fmt[0], k_konst.m_nstr_fmt_arr16.data(), k_konst.m_nstr_fmt_arr16.size());
 	fmt[k_konst.m_nstr_fmt_arr16.size()] = '\0';
 	arr16_to_arr8(&arr16->byteArray16[0], &parts[0]);
-	len = g_app.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]); mk_assert(len >= 1); mk_assert(len < cap);
+	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
 	view.m_len = len;
 	return view;
@@ -1646,12 +1715,12 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	mk_assert(sd);
 
-	b = g_app.m_pfn_ConvertSecurityDescriptorToStringSecurityDescriptorW(((PSECURITY_DESCRIPTOR)(sd->data)), SDDL_REVISION_1, OWNER_SECURITY_INFORMATION  | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | SACL_SECURITY_INFORMATION, &win_buf, NULL); mk_assert(b);
-	len = g_app.m_pfn_wcslen(win_buf);
+	b = g_app.m_funcs_advapi.m_pfn_ConvertSecurityDescriptorToStringSecurityDescriptorW(((PSECURITY_DESCRIPTOR)(sd->data)), SDDL_REVISION_1, OWNER_SECURITY_INFORMATION  | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | SACL_SECURITY_INFORMATION, &win_buf, NULL); mk_assert(b);
+	len = g_app.m_funcs_ntdll.m_pfn_wcslen(win_buf);
 	mk_assert(len < _countof(g_app.m_tmp_wstrs[0]));
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	std::memcpy(&buf[0], win_buf, (len + 1) * sizeof(buf[0]));
-	g_app.m_pfn_LocalFree(win_buf);
+	g_app.m_funcs_kernel.m_pfn_LocalFree(win_buf);
 	wstr.m_buf = buf;
 	wstr.m_len = len;
 	mk_assert(wstr.m_len >= 0);
@@ -1671,12 +1740,12 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	mk_assert(sid);
 
-	b = g_app.m_pfn_ConvertSidToStringSidW(((PSID)(sid)), &txt_sid); mk_assert(b);
+	b = g_app.m_funcs_advapi.m_pfn_ConvertSidToStringSidW(((PSID)(sid)), &txt_sid); mk_assert(b);
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_pfn_wcslen(txt_sid);
+	len = g_app.m_funcs_ntdll.m_pfn_wcslen(txt_sid);
 	ptr = mk_memcpy(buf, txt_sid, len); ((void)(ptr));
 	buf[len] = L'\0';
-	hloc = g_app.m_pfn_LocalFree(txt_sid); mk_assert(!hloc);
+	hloc = g_app.m_funcs_kernel.m_pfn_LocalFree(txt_sid); mk_assert(!hloc);
 	wstr.m_buf = buf;
 	wstr.m_len = len;
 	mk_assert(wstr.m_len >= 0);
@@ -1790,15 +1859,15 @@ static inline void set_max_col_width(HWND const hwnd, int const col_idx, int* co
 {
 	LRESULT lr;
 
-	lr = g_app.m_pfn_SendMessageW(hwnd, LVM_SETCOLUMNWIDTH, col_idx, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-	lr = g_app.m_pfn_SendMessageW(hwnd, LVM_GETCOLUMNWIDTH, col_idx, 0); mk_assert(lr != 0);
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(hwnd, LVM_SETCOLUMNWIDTH, col_idx, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(hwnd, LVM_GETCOLUMNWIDTH, col_idx, 0); mk_assert(lr != 0);
 	if(((int)(lr)) > *max_storage)
 	{
 		*max_storage = ((int)(lr));
 	}
 	else if(((int)(lr)) < *max_storage)
 	{
-		lr = g_app.m_pfn_SendMessageW(hwnd, LVM_SETCOLUMNWIDTH, col_idx, *max_storage); mk_assert(lr != 0);
+		lr = g_app.m_funcs_user.m_pfn_SendMessageW(hwnd, LVM_SETCOLUMNWIDTH, col_idx, *max_storage); mk_assert(lr != 0);
 	}
 }
 
@@ -1825,7 +1894,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 
 	call_def = true;
 	lres = 0;
-	ptr = g_app.m_pfn_GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+	ptr = g_app.m_funcs_user.m_pfn_GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 	self = ((mk_wnd_t*)(ptr));
 	switch(msg)
 	{
@@ -1834,61 +1903,61 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			crt = ((CREATESTRUCTW*)(lparam));
 			self = ((mk_wnd_t*)(crt->lpCreateParams));
 			self->m_hwnd = hwnd;
-			ptr = g_app.m_pfn_SetWindowLongPtrW(self->m_hwnd, GWLP_USERDATA, ((LONG_PTR)(self))); mk_assert(ptr == 0);
+			ptr = g_app.m_funcs_user.m_pfn_SetWindowLongPtrW(self->m_hwnd, GWLP_USERDATA, ((LONG_PTR)(self))); mk_assert(ptr == 0);
 
 			self->m_entry_id = 0;
 			self->m_max_width_condition = 10;
 			self->m_max_width_match = 10;
 			self->m_max_width_type = 10;
-			self->m_list = g_app.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
+			self->m_list = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_name).m_buf)); col.cx = 80;
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 0, ((LPARAM)(&col))); mk_assert(lr == 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 0, ((LPARAM)(&col))); mk_assert(lr == 0);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_description).m_buf)); col.cx = 180;
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 1, ((LPARAM)(&col))); mk_assert(lr == 1);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 1, ((LPARAM)(&col))); mk_assert(lr == 1);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_provider).m_buf)); col.cx = 80;
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 2, ((LPARAM)(&col))); mk_assert(lr == 2);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 2, ((LPARAM)(&col))); mk_assert(lr == 2);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_layer).m_buf)); col.cx = 80;
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 3, ((LPARAM)(&col))); mk_assert(lr == 3);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 3, ((LPARAM)(&col))); mk_assert(lr == 3);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_sublayer).m_buf)); col.cx = 80;
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 4, ((LPARAM)(&col))); mk_assert(lr == 4);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 4, ((LPARAM)(&col))); mk_assert(lr == 4);
 
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
 
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 2, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 3, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 4, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 2, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 3, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 4, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 
-			self->m_conditions = g_app.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
-			lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
+			self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_key).m_buf)); col.cx = 80;
-			lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 0, ((LPARAM)(&col))); mk_assert(lr == 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 0, ((LPARAM)(&col))); mk_assert(lr == 0);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_match_type).m_buf)); col.cx = 80;
-			lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 1, ((LPARAM)(&col))); mk_assert(lr == 1);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 1, ((LPARAM)(&col))); mk_assert(lr == 1);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_type).m_buf)); col.cx = 80;
-			lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 2, ((LPARAM)(&col))); mk_assert(lr == 2);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 2, ((LPARAM)(&col))); mk_assert(lr == 2);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_value).m_buf)); col.cx = 200;
-			lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 3, ((LPARAM)(&col))); mk_assert(lr == 3);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 3, ((LPARAM)(&col))); mk_assert(lr == 3);
 		break;
 		case WM_DESTROY:
-			g_app.m_pfn_PostQuitMessage(0);
+			g_app.m_funcs_user.m_pfn_PostQuitMessage(0);
 		break;
 		case WM_SIZE:
-			b = g_app.m_pfn_GetClientRect(self->m_hwnd, &rect); mk_assert(b); mk_assert(rect.left == 0); mk_assert(rect.top == 0);
+			b = g_app.m_funcs_user.m_pfn_GetClientRect(self->m_hwnd, &rect); mk_assert(b); mk_assert(rect.left == 0); mk_assert(rect.top == 0);
 			height = rect.bottom / 2 - 2;
 			height = height < 0 ? 0 : height;
 			top = height + 2 * 2;
-			b = g_app.m_pfn_MoveWindow(self->m_list, 0, 0, rect.right, height, TRUE); mk_assert(b);
-			b = g_app.m_pfn_MoveWindow(self->m_conditions, 0, top, rect.right, height, TRUE); mk_assert(b);
+			b = g_app.m_funcs_user.m_pfn_MoveWindow(self->m_list, 0, 0, rect.right, height, TRUE); mk_assert(b);
+			b = g_app.m_funcs_user.m_pfn_MoveWindow(self->m_conditions, 0, top, rect.right, height, TRUE); mk_assert(b);
 		break;
 		case WM_NOTIFY:
 			nm = ((NMHDR*)(lparam));
@@ -1970,13 +2039,13 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 							item = changed->iItem;
 							self->m_entry_id = item;
 							entry = self->m_fw->m_entries[item];
-							lr = g_app.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
-							lr = g_app.m_pfn_SendMessageW(self->m_conditions, LVM_SETITEMCOUNT, entry->numFilterConditions, 0); mk_assert(lr != 0);
+							lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
+							lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETITEMCOUNT, entry->numFilterConditions, 0); mk_assert(lr != 0);
 							set_max_col_width(self->m_conditions, 0, &self->m_max_width_condition);
 							set_max_col_width(self->m_conditions, 1, &self->m_max_width_match);
 							set_max_col_width(self->m_conditions, 2, &self->m_max_width_type);
-							b = g_app.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
-							lr = g_app.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
+							b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
+							lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						}
 					}
 				}
@@ -2045,7 +2114,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 	}
 	if(call_def)
 	{
-		lres = g_app.m_pfn_DefWindowProcW(hwnd, msg, wparam, lparam);
+		lres = g_app.m_funcs_user.m_pfn_DefWindowProcW(hwnd, msg, wparam, lparam);
 	}
 	return lres;
 }
@@ -2072,32 +2141,32 @@ extern "C" DWORD __stdcall mk_entry(PPEB const peb)
 	wnd_cls_info.cbClsExtra = 0;
 	wnd_cls_info.cbWndExtra = sizeof(mk_wnd_t*);
 	wnd_cls_info.hInstance = g_app.m_dll_exe;
-	wnd_cls_info.hIcon = g_app.m_pfn_LoadIconW(NULL, IDI_APPLICATION);
-	wnd_cls_info.hCursor = g_app.m_pfn_LoadCursorW(NULL, IDC_ARROW);
+	wnd_cls_info.hIcon = g_app.m_funcs_user.m_pfn_LoadIconW(NULL, IDI_APPLICATION);
+	wnd_cls_info.hCursor = g_app.m_funcs_user.m_pfn_LoadCursorW(NULL, IDC_ARROW);
 	wnd_cls_info.hbrBackground = ((HBRUSH)(COLOR_APPWORKSPACE + 1));
 	wnd_cls_info.lpszMenuName = NULL;
 	wnd_cls_info.lpszClassName = nstr_to_wstr(k_konst.m_nstr_mkfw).m_buf;
-	wnd_cls_info.hIconSm = g_app.m_pfn_LoadIconW(NULL, IDI_APPLICATION);
-	wnd_cls_atom = g_app.m_pfn_RegisterClassExW(&wnd_cls_info); mk_assert(wnd_cls_atom);
+	wnd_cls_info.hIconSm = g_app.m_funcs_user.m_pfn_LoadIconW(NULL, IDI_APPLICATION);
+	wnd_cls_atom = g_app.m_funcs_user.m_pfn_RegisterClassExW(&wnd_cls_info); mk_assert(wnd_cls_atom);
 	g_app.m_fw_wnd.m_fw = &g_app.m_fw;
-	hwnd = g_app.m_pfn_CreateWindowExW(WS_EX_APPWINDOW, ((LPCWSTR)(wnd_cls_atom)), nstr_to_wstr(k_konst.m_nstr_fire_wall).m_buf, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, g_app.m_dll_exe, &g_app.m_fw_wnd); mk_assert(hwnd);
-	b = g_app.m_pfn_ShowWindow(hwnd, SW_SHOWDEFAULT); ((void)(b));
+	hwnd = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_APPWINDOW, ((LPCWSTR)(wnd_cls_atom)), nstr_to_wstr(k_konst.m_nstr_fire_wall).m_buf, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, g_app.m_dll_exe, &g_app.m_fw_wnd); mk_assert(hwnd);
+	b = g_app.m_funcs_user.m_pfn_ShowWindow(hwnd, SW_SHOWDEFAULT); ((void)(b));
 	for(;;)
 	{
-		b = g_app.m_pfn_PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE);
+		b = g_app.m_funcs_user.m_pfn_PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE);
 		if(!b)
 		{
-			b = g_app.m_pfn_GetMessageW(&msg, NULL, 0, 0); mk_assert((b == TRUE) || (b == FALSE && msg.message == WM_QUIT));
+			b = g_app.m_funcs_user.m_pfn_GetMessageW(&msg, NULL, 0, 0); mk_assert((b == TRUE) || (b == FALSE && msg.message == WM_QUIT));
 		}
 		if(msg.message == WM_QUIT)
 		{
 			break;
 		}
-		b = g_app.m_pfn_TranslateMessage(&msg); ((void)(b));
-		lr = g_app.m_pfn_DispatchMessageW(&msg); ((void)(lr));
+		b = g_app.m_funcs_user.m_pfn_TranslateMessage(&msg); ((void)(b));
+		lr = g_app.m_funcs_user.m_pfn_DispatchMessageW(&msg); ((void)(lr));
 	}
 	fw_destroy(&g_app.m_fw);
-	g_app.m_pfn_ExitProcess(((UINT)(msg.wParam)));
+	g_app.m_funcs_kernel.m_pfn_ExitProcess(((UINT)(msg.wParam)));
 	return 0;
 }
 
