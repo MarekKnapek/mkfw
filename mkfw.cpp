@@ -464,19 +464,19 @@ template<typename t, size_t n>
 	x(wnd_cls_name_list_view, "SysListView32") \
 
 #define mk_x_matches() \
-	x(FWP_MATCH_EQUAL                 , "equal"                 ) \
-	x(FWP_MATCH_GREATER               , "greater"               ) \
-	x(FWP_MATCH_LESS                  , "less"                  ) \
-	x(FWP_MATCH_GREATER_OR_EQUAL      , "greater or equal"      ) \
-	x(FWP_MATCH_LESS_OR_EQUAL         , "less or equal"         ) \
-	x(FWP_MATCH_RANGE                 , "range"                 ) \
-	x(FWP_MATCH_FLAGS_ALL_SET         , "flags all set"         ) \
-	x(FWP_MATCH_FLAGS_ANY_SET         , "flags any set"         ) \
-	x(FWP_MATCH_FLAGS_NONE_SET        , "flags none set"        ) \
-	x(FWP_MATCH_EQUAL_CASE_INSENSITIVE, "equal case insensitive") \
-	x(FWP_MATCH_NOT_EQUAL             , "not equal"             ) \
-	x(FWP_MATCH_PREFIX                , "prefix"                ) \
-	x(FWP_MATCH_NOT_PREFIX            , "not prefix"            ) \
+	x(FWP_MATCH_EQUAL                 , "FWP_MATCH_EQUAL"                 ) \
+	x(FWP_MATCH_GREATER               , "FWP_MATCH_GREATER"               ) \
+	x(FWP_MATCH_LESS                  , "FWP_MATCH_LESS"                  ) \
+	x(FWP_MATCH_GREATER_OR_EQUAL      , "FWP_MATCH_GREATER_OR_EQUAL"      ) \
+	x(FWP_MATCH_LESS_OR_EQUAL         , "FWP_MATCH_LESS_OR_EQUAL"         ) \
+	x(FWP_MATCH_RANGE                 , "FWP_MATCH_RANGE"                 ) \
+	x(FWP_MATCH_FLAGS_ALL_SET         , "FWP_MATCH_FLAGS_ALL_SET"         ) \
+	x(FWP_MATCH_FLAGS_ANY_SET         , "FWP_MATCH_FLAGS_ANY_SET"         ) \
+	x(FWP_MATCH_FLAGS_NONE_SET        , "FWP_MATCH_FLAGS_NONE_SET"        ) \
+	x(FWP_MATCH_EQUAL_CASE_INSENSITIVE, "FWP_MATCH_EQUAL_CASE_INSENSITIVE") \
+	x(FWP_MATCH_NOT_EQUAL             , "FWP_MATCH_NOT_EQUAL"             ) \
+	x(FWP_MATCH_PREFIX                , "FWP_MATCH_PREFIX"                ) \
+	x(FWP_MATCH_NOT_PREFIX            , "FWP_MATCH_NOT_PREFIX"            ) \
 
 #define mk_x_types() \
 	x(FWP_EMPTY                        , "FWP_EMPTY"                        ) \
@@ -988,7 +988,7 @@ enum matches_get_texts_len_e { matches_get_texts_len_v = matches_get_texts_len()
 
 struct matches_texts_s
 {
-	unsigned char m_offs[matches_get_count_v + 1];
+	signed short int m_offs[matches_get_count_v + 1];
 	char m_txt_buf[matches_get_texts_len_v];
 };
 typedef struct matches_texts_s matches_texts_t;
@@ -1005,8 +1005,8 @@ typedef struct matches_texts_s matches_texts_t;
 	#define x(enm, txt) \
 		len = _countof(txt) - 1; \
 		mk_assert(len >= 1); \
-		mk_assert(len <= UCHAR_MAX / 4); \
-		mk_assert(texts.m_offs[i] <= UCHAR_MAX - len); \
+		mk_assert(len <= SHORT_MAX / 4); \
+		mk_assert(texts.m_offs[i] <= SHORT_MAX - len); \
 		texts.m_offs[i + 1] = texts.m_offs[i] + len; \
 		std::copy(&txt[0], &txt[0] + len, &texts.m_txt_buf[0] + texts.m_offs[i]); \
 		++i;
