@@ -416,6 +416,7 @@ template<typename t, size_t n>
 	x(PostQuitMessage) \
 	x(RegisterClassExW) \
 	x(SendMessageW) \
+	x(SetFocus) \
 	x(SetWindowLongPtrW) \
 	x(ShowWindow) \
 	x(TranslateMessage) \
@@ -1245,12 +1246,21 @@ enum mk_cols_condition_e
 };
 typedef enum mk_cols_condition_e mk_cols_condition_t;
 
+enum mk_wnd_sub_window_id_e
+{
+	mk_wnd_sub_window_id_e_entries,
+	mk_wnd_sub_window_id_e_conditions,
+	mk_wnd_sub_window_id_e_dummy_end
+};
+typedef enum mk_wnd_sub_window_id_e mk_wnd_sub_window_id_t;
+
 struct mk_wnd_s
 {
 	HWND m_hwnd;
 	HWND m_list;
 	HWND m_conditions;
 	mk_fw_t* m_fw;
+	mk_wnd_sub_window_id_t m_last_sub_window_focus;
 	int m_entry_id;
 	int m_max_width_entry_filter;
 	int m_max_width_entry_provider;
@@ -2044,6 +2054,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 	int item;
 	FWPM_FILTER0* entry;
 	FWPM_FILTER_CONDITION0* condition;
+	HWND wnd;
 
 	call_def = true;
 	lres = 0;
@@ -2058,6 +2069,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			self->m_hwnd = hwnd;
 			ptr = g_app.m_funcs_user.m_pfn_SetWindowLongPtrW(self->m_hwnd, GWLP_USERDATA, ((LONG_PTR)(self))); mk_assert(ptr == 0);
 
+			self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_entries;
 			self->m_entry_id = 0;
 			self->m_max_width_entry_filter = 10;
 			self->m_max_width_entry_provider = 10;
@@ -2123,6 +2135,20 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			top = height + 2 * 2;
 			b = g_app.m_funcs_user.m_pfn_MoveWindow(self->m_list, 0, 0, rect.right, height, TRUE); mk_assert(b);
 			b = g_app.m_funcs_user.m_pfn_MoveWindow(self->m_conditions, 0, top, rect.right, height, TRUE); mk_assert(b);
+		break;
+		case WM_SETFOCUS:
+			wnd = NULL;
+			switch(self->m_last_sub_window_focus)
+			{
+				case mk_wnd_sub_window_id_e_entries: wnd = self->m_list; break;
+				case mk_wnd_sub_window_id_e_conditions: wnd = self->m_conditions; break;
+				case mk_wnd_sub_window_id_e_dummy_end: wnd = NULL; break;
+				default: wnd = NULL; break;
+			}
+			if(wnd)
+			{
+				wnd = g_app.m_funcs_user.m_pfn_SetFocus(wnd); ((void)(wnd));
+			}
 		break;
 		case WM_NOTIFY:
 			nm = ((NMHDR*)(lparam));
@@ -2199,6 +2225,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 				}
 				else if(nm->code == LVN_ITEMCHANGED)
 				{
+					self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_entries;
 					changed = ((NMLISTVIEW*)(nm));
 					if((changed->iItem != -1) && ((changed->uNewState & LVIS_SELECTED) != 0))
 					{
@@ -2283,6 +2310,10 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 					{
 						mk_assert(false);
 					}
+				}
+				else if(nm->code == LVN_ITEMCHANGED)
+				{
+					self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_conditions;
 				}
 			}
 		break;
