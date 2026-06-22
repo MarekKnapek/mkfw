@@ -451,8 +451,8 @@ template<typename t, size_t n>
 	x(empty, "") \
 	x(field, "Field") \
 	x(filter, "Filter") \
-	x(filter_id, "Filer ID") \
-	x(filter_type_callout, "Filer Type / Callout") \
+	x(filter_id, "Filter ID") \
+	x(filter_type_callout, "Filter Type / Callout") \
 	x(fire_wall, "FireWall") \
 	x(fmt_arr16, "[%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x]") \
 	x(fmt_ipv4, "%d.%d.%d.%d") \
