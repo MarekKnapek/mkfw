@@ -444,6 +444,7 @@ template<typename t, size_t n>
 	x(empty, "") \
 	x(field, "Field") \
 	x(filter, "Filter") \
+	x(filter_id, "Filer ID") \
 	x(filter_type_callout, "Filer Type / Callout") \
 	x(fire_wall, "FireWall") \
 	x(fmt_arr16, "[%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x]") \
@@ -1285,6 +1286,7 @@ enum mk_col_id_entry_e
 	mk_col_id_entry_e_sub_layer,
 	mk_col_id_entry_e_action,
 	mk_col_id_entry_e_callout,
+	mk_col_id_entry_e_id,
 	mk_col_id_entry_e_dummy_end
 };
 typedef enum mk_col_id_entry_e mk_col_id_entry_t;
@@ -1321,6 +1323,7 @@ struct mk_wnd_s
 	int m_max_width_entry_sub_layer;
 	int m_max_width_entry_action;
 	int m_max_width_entry_callout;
+	int m_max_width_entry_id;
 	int m_max_width_condition_field;
 	int m_max_width_condition_match_type;
 	int m_max_width_condition_value_type;
@@ -2164,6 +2167,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			self->m_max_width_entry_sub_layer = 10;
 			self->m_max_width_entry_action = 10;
 			self->m_max_width_entry_callout = 10;
+			self->m_max_width_entry_id = 10;
 			self->m_max_width_condition_field = 10;
 			self->m_max_width_condition_match_type = 10;
 			self->m_max_width_condition_value_type = 10;
@@ -2193,6 +2197,9 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_filter_type_callout).m_buf)); col.cx = 80;
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_callout, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_callout);
+
+			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_filter_id).m_buf)); col.cx = 80;
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_id, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_id);
 
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
 
@@ -2289,6 +2296,10 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						{
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text_not_null(&entry->action.calloutKey).m_buf));
 						}
+						else if(disp_info->item.iSubItem == mk_col_id_entry_e_id)
+						{
+							disp_info->item.pszText = ((LPWSTR)(nstr_to_wstr(value_to_nstr_uint64(&entry->filterId)).m_buf));
+						}
 						else
 						{
 							mk_assert(false);
@@ -2331,6 +2342,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_sub_layer, &self->m_max_width_entry_sub_layer);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_action, &self->m_max_width_entry_action);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_callout, &self->m_max_width_entry_callout);
+						set_max_col_width(self->m_entries, mk_col_id_entry_e_id, &self->m_max_width_entry_id);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						item = changed->iItem;
 						mk_assert(item >= 0);
