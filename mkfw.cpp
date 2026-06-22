@@ -439,13 +439,13 @@ template<typename t, size_t n>
 #define mk_x_nstrings() \
 	x(description, "Description") \
 	x(empty, "") \
+	x(field, "Field") \
 	x(fire_wall, "FireWall") \
 	x(fmt_arr16, "[%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x]") \
 	x(fmt_u16, "0x%04x (%d)") \
 	x(fmt_u32, "0x%08x (%d)") \
 	x(fmt_u64, "0x%016llx (%lld)") \
 	x(fmt_u8, "0x%02x (%d)") \
-	x(key, "Key") \
 	x(layer, "Layer") \
 	x(match_type, "Match Type") \
 	x(mkfw, "mkfw") \
@@ -1143,6 +1143,28 @@ struct mk_fw_s
 	UINT32 m_count;
 };
 typedef struct mk_fw_s mk_fw_t;
+
+enum mk_cols_entry_e
+{
+	//mk_cols_entry_e_filter,
+	mk_cols_entry_e_name,
+	mk_cols_entry_e_description,
+	mk_cols_entry_e_provider,
+	mk_cols_entry_e_layer,
+	mk_cols_entry_e_sub_layer,
+	mk_cols_entry_e_dummy_end
+};
+typedef enum mk_cols_entry_e mk_cols_entry_t;
+
+enum mk_cols_condition_e
+{
+	mk_cols_condition_e_field,
+	mk_cols_condition_e_match_type,
+	mk_cols_condition_e_value_type,
+	mk_cols_condition_e_value_data,
+	mk_cols_condition_e_dummy_end
+};
+typedef enum mk_cols_condition_e mk_cols_condition_t;
 
 struct mk_wnd_s
 {
@@ -1913,40 +1935,40 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_name).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 0, ((LPARAM)(&col))); mk_assert(lr == 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_name, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_name);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_description).m_buf)); col.cx = 180;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 1, ((LPARAM)(&col))); mk_assert(lr == 1);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_description, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_description);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_provider).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 2, ((LPARAM)(&col))); mk_assert(lr == 2);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_provider, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_provider);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_layer).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 3, ((LPARAM)(&col))); mk_assert(lr == 3);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_layer, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_layer);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_sublayer).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, 4, ((LPARAM)(&col))); mk_assert(lr == 4);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_INSERTCOLUMN, mk_cols_entry_e_sub_layer, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_sub_layer);
 
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
 
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 2, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 3, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, 4, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_provider, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_list, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_sub_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 
 			self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_list);
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
-			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_key).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 0, ((LPARAM)(&col))); mk_assert(lr == 0);
+			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_field).m_buf)); col.cx = 80;
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_cols_condition_e_field, ((LPARAM)(&col))); mk_assert(lr == mk_cols_condition_e_field);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_match_type).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 1, ((LPARAM)(&col))); mk_assert(lr == 1);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_cols_condition_e_match_type, ((LPARAM)(&col))); mk_assert(lr == mk_cols_condition_e_match_type);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_type).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 2, ((LPARAM)(&col))); mk_assert(lr == 2);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_cols_condition_e_value_type, ((LPARAM)(&col))); mk_assert(lr == mk_cols_condition_e_value_type);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_value).m_buf)); col.cx = 200;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, 3, ((LPARAM)(&col))); mk_assert(lr == 3);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_cols_condition_e_value_data, ((LPARAM)(&col))); mk_assert(lr == mk_cols_condition_e_value_data);
 		break;
 		case WM_DESTROY:
 			g_app.m_funcs_user.m_pfn_PostQuitMessage(0);
@@ -1969,35 +1991,27 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 					mask = disp_info->item.mask;
 					if((mask & LVIF_TEXT) != 0)
 					{
+						mk_assert(disp_info->item.iItem >= 0);
+						mk_assert(disp_info->item.iItem < ((int)(self->m_fw->m_count)));
 						mask &=~ LVIF_TEXT;
-						if(disp_info->item.iSubItem == 0)
+						if(disp_info->item.iSubItem == mk_cols_entry_e_name)
 						{
-							mk_assert(disp_info->item.iItem >= 0);
-							mk_assert(disp_info->item.iItem < ((int)(self->m_fw->m_count)));
 							disp_info->item.pszText = self->m_fw->m_entries[disp_info->item.iItem]->displayData.name;
 						}
-						else if(disp_info->item.iSubItem == 1)
+						else if(disp_info->item.iSubItem == mk_cols_entry_e_description)
 						{
-							mk_assert(disp_info->item.iItem >= 0);
-							mk_assert(disp_info->item.iItem < ((int)(self->m_fw->m_count)));
 							disp_info->item.pszText = self->m_fw->m_entries[disp_info->item.iItem]->displayData.description;
 						}
-						else if(disp_info->item.iSubItem == 2)
+						else if(disp_info->item.iSubItem == mk_cols_entry_e_provider)
 						{
-							mk_assert(disp_info->item.iItem >= 0);
-							mk_assert(disp_info->item.iItem < ((int)(self->m_fw->m_count)));
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(self->m_fw->m_entries[disp_info->item.iItem]->providerKey).m_buf));
 						}
-						else if(disp_info->item.iSubItem == 3)
+						else if(disp_info->item.iSubItem == mk_cols_entry_e_layer)
 						{
-							mk_assert(disp_info->item.iItem >= 0);
-							mk_assert(disp_info->item.iItem < ((int)(self->m_fw->m_count)));
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&self->m_fw->m_entries[disp_info->item.iItem]->layerKey).m_buf));
 						}
-						else if(disp_info->item.iSubItem == 4)
+						else if(disp_info->item.iSubItem == mk_cols_entry_e_sub_layer)
 						{
-							mk_assert(disp_info->item.iItem >= 0);
-							mk_assert(disp_info->item.iItem < ((int)(self->m_fw->m_count)));
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&self->m_fw->m_entries[disp_info->item.iItem]->subLayerKey).m_buf));
 						}
 						else
@@ -2064,19 +2078,19 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 					if((mask & LVIF_TEXT) != 0)
 					{
 						mask &=~ LVIF_TEXT;
-						if(disp_info->item.iSubItem == 0)
+						if(disp_info->item.iSubItem == mk_cols_condition_e_field)
 						{
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&condition->fieldKey).m_buf));
 						}
-						else if(disp_info->item.iSubItem == 1)
+						else if(disp_info->item.iSubItem == mk_cols_condition_e_match_type)
 						{
 							disp_info->item.pszText = ((LPWSTR)(match_type_to_text(condition->matchType).m_buf));
 						}
-						else if(disp_info->item.iSubItem == 2)
+						else if(disp_info->item.iSubItem == mk_cols_condition_e_value_type)
 						{
 							disp_info->item.pszText = ((LPWSTR)(type_to_text(condition->conditionValue.type).m_buf));
 						}
-						else if(disp_info->item.iSubItem == 3)
+						else if(disp_info->item.iSubItem == mk_cols_condition_e_value_data)
 						{
 							disp_info->item.pszText = ((LPWSTR)(condition_value_to_text(&condition->conditionValue).m_buf));
 						}
