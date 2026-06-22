@@ -456,6 +456,9 @@ template<typename t, size_t n>
 	x(fire_wall, "FireWall") \
 	x(fmt_arr16, "[%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x]") \
 	x(fmt_ipv4, "%d.%d.%d.%d") \
+	x(fmt_ipv6_mask_128, "%x:%x:%x:%x:%x:%x:%x:%x/%d") \
+	x(fmt_ipv6_mask_32, "%x:%x::/%d") \
+	x(fmt_ipv6_mask_48, "%x:%x:%x::/%d") \
 	x(fmt_u16, "0x%04x (%d)") \
 	x(fmt_u32, "0x%08x (%d)") \
 	x(fmt_u64, "0x%016llx (%lld)") \
@@ -1488,26 +1491,31 @@ static inline void fw_destroy(mk_fw_t* const fw)
 	dw = g_app.m_funcs_fw.m_pfn_FwpmEngineClose0(fw->m_eng); mk_assert(dw == ERROR_SUCCESS);
 }
 
-[[nodiscard]] static inline auto nstr_to_nstr(LPCSTR const nstr, int const len)
+[[nodiscard]] static inline mk_view_t<CHAR, 0> nstr_to_nstr(LPCSTR const win_str, int const len)
 {
-	LPSTR pstr;
+	LPSTR buf;
 	int n;
 	int i;
+	mk_view_t<CHAR, 0> nstr;
 
 	mk_assert(len < _countof(g_app.m_tmp_nstrs[0]));
 
-	pstr = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	n = len;
 	for(i = 0; i != n; ++i)
 	{
-		pstr[i] = ((CHAR)(nstr[i]));
+		buf[i] = ((CHAR)(win_str[i]));
 	}
-	pstr[i] = '\0';
-	return pstr;
+	buf[i] = '\0';
+	nstr.m_buf = buf;
+	nstr.m_len = len;
+	mk_assert(nstr.m_len >= 0);
+	mk_assert(nstr.m_buf[nstr.m_len] == '\0');
+	return nstr;
 }
 
 template<size_t n>
-[[nodiscard]] static inline auto nstr_to_nstr(std::array<char, n> const& arr)
+[[nodiscard]] static inline mk_view_t<CHAR, 0> nstr_to_nstr(std::array<char, n> const& arr)
 {
 	return nstr_to_nstr(arr.data(), ((int)(arr.size())));
 }
@@ -1639,7 +1647,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	mk_x_kernel_funcs()
 	#undef x
 
-	#define x(name) g_app.m_dll_##name = g_app.m_funcs_kernel.m_pfn_LoadLibraryExA(nstr_to_nstr(k_konst.m_nstr_##name), NULL, LOAD_LIBRARY_SEARCH_SYSTEM32); mk_assert(g_app.m_dll_##name);
+	#define x(name) g_app.m_dll_##name = g_app.m_funcs_kernel.m_pfn_LoadLibraryExA(nstr_to_nstr(k_konst.m_nstr_##name).m_buf, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32); mk_assert(g_app.m_dll_##name);
 	mk_x_dlls_to_load()
 	#undef x
 
@@ -2111,6 +2119,8 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 		case FWP_UINT64:
 			wstr = nstr_to_wstr(value_to_nstr_uint64(value->uint64));
 		break;
+		case FWP_BYTE_ARRAY16_TYPE:
+			wstr = nstr_to_wstr(value_to_nstr_arr16(value->byteArray16));
 		case FWP_BYTE_BLOB_TYPE:
 			wstr = value_to_wstr_blob(value->byteBlob);
 		break;
@@ -2293,6 +2303,100 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	return nstr;
 }
 
+[[nodiscard]] static inline mk_view_t<CHAR, 0> ip_address_v6_range_to_nstr(FWP_CONDITION_VALUE0 const* const range)
+{
+	int same_bits;
+	int n;
+	int i;
+	int m;
+	int j;
+	char* fmt;
+	char* buf;
+	int cap;
+	USHORT parts[8];
+	int len;
+	mk_view_t<char, 0> nstr;
+
+	mk_assert(range);
+
+	same_bits = 0;
+	n = 16;
+	for(i = 0; i != n; ++i)
+	{
+		if(range->rangeValue->valueLow.byteArray16->byteArray16[i] == range->rangeValue->valueHigh.byteArray16->byteArray16[i])
+		{
+			same_bits += CHAR_BIT;
+		}
+		else
+		{
+			break;
+		}
+	}
+	m = CHAR_BIT;
+	for(j = 0; j != m; ++j)
+	{
+		if
+		(
+			(range->rangeValue->valueLow .byteArray16->byteArray16[i] & (1u << ((CHAR_BIT - 1) - j))) ==
+			(range->rangeValue->valueHigh.byteArray16->byteArray16[i] & (1u << ((CHAR_BIT - 1) - j)))
+		)
+		{
+			++same_bits;
+		}
+		else
+		{
+			break;
+		}
+	}
+	/* todo this is incomplete */
+	if(false){}
+	else if(same_bits > 16 && same_bits <= 32)
+	{
+		fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		cap = _countof(g_app.m_tmp_nstrs[0]);
+		std::memcpy(&fmt[0], k_konst.m_nstr_fmt_ipv6_mask_32.data(), k_konst.m_nstr_fmt_ipv6_mask_32.size());
+		fmt[k_konst.m_nstr_fmt_ipv6_mask_32.size()] = '\0';
+		arr16_to_arr8(&range->rangeValue->valueHigh.byteArray16->byteArray16[0], &parts[0]);
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], same_bits); mk_assert(len >= 1); mk_assert(len < cap);
+		nstr.m_buf = buf;
+		nstr.m_len = len;
+	}
+	else if(same_bits > 32 && same_bits <= 48)
+	{
+		fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		cap = _countof(g_app.m_tmp_nstrs[0]);
+		std::memcpy(&fmt[0], k_konst.m_nstr_fmt_ipv6_mask_48.data(), k_konst.m_nstr_fmt_ipv6_mask_48.size());
+		fmt[k_konst.m_nstr_fmt_ipv6_mask_48.size()] = '\0';
+		arr16_to_arr8(&range->rangeValue->valueLow.byteArray16->byteArray16[0], &parts[0]);
+		parts[2] &= (((1u << (same_bits - 32)) - 1) << (16 - (same_bits - 32)));
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], same_bits); mk_assert(len >= 1); mk_assert(len < cap);
+		nstr.m_buf = buf;
+		nstr.m_len = len;
+	}
+	else if(same_bits > 112 && same_bits <= 128)
+	{
+		fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		cap = _countof(g_app.m_tmp_nstrs[0]);
+		std::memcpy(&fmt[0], k_konst.m_nstr_fmt_ipv6_mask_128.data(), k_konst.m_nstr_fmt_ipv6_mask_128.size());
+		fmt[k_konst.m_nstr_fmt_ipv6_mask_128.size()] = '\0';
+		arr16_to_arr8(&range->rangeValue->valueLow.byteArray16->byteArray16[0], &parts[0]);
+		parts[7] &= (((1u << (same_bits - 112)) - 1) << (16 - (same_bits - 112)));
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], same_bits); mk_assert(len >= 1); mk_assert(len < cap);
+		nstr.m_buf = buf;
+		nstr.m_len = len;
+	}
+	else
+	{
+		nstr = nstr_to_nstr(k_konst.m_nstr_empty);
+	}
+	mk_assert(nstr.m_len >= 0);
+	mk_assert(nstr.m_buf[nstr.m_len] == '\0');
+	return nstr;
+}
+
 [[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_note(FWPM_FILTER_CONDITION0 const* const condition)
 {
 	mk_view_t<WCHAR, 0> wstr;
@@ -2316,6 +2420,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 113)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_pgm        ); }
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 115)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_l2tp       ); }
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_UINT32)){ wstr = nstr_to_wstr(ip_address_v4_to_nstr(condition->conditionValue.uint32)); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_RANGE_TYPE) && (condition->conditionValue.rangeValue->valueLow.type == FWP_BYTE_ARRAY16_TYPE) && (condition->conditionValue.rangeValue->valueHigh.type == FWP_BYTE_ARRAY16_TYPE)){ wstr = nstr_to_wstr(ip_address_v6_range_to_nstr(&condition->conditionValue)); }
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
 	return wstr;
