@@ -416,6 +416,7 @@ template<typename t, size_t n>
 	x(InvalidateRect) \
 	x(LoadCursorW) \
 	x(LoadIconW) \
+	x(LockWindowUpdate) \
 	x(MoveWindow) \
 	x(PeekMessageW) \
 	x(PostMessageW) \
@@ -2766,6 +2767,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 					if((changed->iItem != -1) && ((changed->uNewState & LVIS_SELECTED) != 0))
 					{
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
+						b = g_app.m_funcs_user.m_pfn_LockWindowUpdate(self->m_entries); mk_assert(b);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_filter, &self->m_max_width_entry_filter);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_provider, &self->m_max_width_entry_provider);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_layer, &self->m_max_width_entry_layer);
@@ -2775,6 +2777,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_id, &self->m_max_width_entry_id);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_weight, &self->m_max_width_entry_weight);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_effective_weight, &self->m_max_width_entry_effective_weight);
+						b = g_app.m_funcs_user.m_pfn_LockWindowUpdate(NULL); mk_assert(b);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						item = changed->iItem;
 						mk_assert(item >= 0);
@@ -2782,13 +2785,15 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						self->m_entry_id = item;
 						entry = self->m_fw->m_entries[self->m_sort_ints[item]];
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
+						b = g_app.m_funcs_user.m_pfn_LockWindowUpdate(self->m_conditions); mk_assert(b);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETITEMCOUNT, entry->numFilterConditions, 0); mk_assert(lr != 0);
 						set_max_col_width(self->m_conditions, mk_col_id_condition_e_field, &self->m_max_width_condition_field);
 						set_max_col_width(self->m_conditions, mk_col_id_condition_e_match_type, &self->m_max_width_condition_match_type);
 						set_max_col_width(self->m_conditions, mk_col_id_condition_e_value_type, &self->m_max_width_condition_value_type);
 						set_max_col_width(self->m_conditions, mk_col_id_condition_e_note, &self->m_max_width_condition_note);
-						b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
+						b = g_app.m_funcs_user.m_pfn_LockWindowUpdate(NULL); mk_assert(b);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
+						b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
 						b = g_app.m_funcs_user.m_pfn_UpdateWindow(self->m_conditions); mk_assert(b);
 					}
 				}
