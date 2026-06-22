@@ -465,6 +465,7 @@ template<typename t, size_t n>
 	x(sublayer, "Sub Layer") \
 	x(type, "Type") \
 	x(value, "Value") \
+	x(weight, "Weight") \
 	x(wnd_cls_name_list_view, "SysListView32") \
 
 #define mk_x_matches() \
@@ -1288,6 +1289,7 @@ enum mk_col_id_entry_e
 	mk_col_id_entry_e_action,
 	mk_col_id_entry_e_callout,
 	mk_col_id_entry_e_id,
+	mk_col_id_entry_e_weight,
 	mk_col_id_entry_e_effective_weight,
 	mk_col_id_entry_e_dummy_end
 };
@@ -1326,6 +1328,7 @@ struct mk_wnd_s
 	int m_max_width_entry_action;
 	int m_max_width_entry_callout;
 	int m_max_width_entry_id;
+	int m_max_width_entry_weight;
 	int m_max_width_entry_effective_weight;
 	int m_max_width_condition_field;
 	int m_max_width_condition_match_type;
@@ -1971,6 +1974,9 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	switch(value->type)
 	{
+		case FWP_EMPTY:
+			wstr = nstr_to_wstr(k_konst.m_nstr_empty);
+		break;
 		case FWP_UINT8:
 			wstr = nstr_to_wstr(value_to_nstr_uint8(value->uint8));
 		break;
@@ -2174,6 +2180,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			self->m_max_width_entry_action = 10;
 			self->m_max_width_entry_callout = 10;
 			self->m_max_width_entry_id = 10;
+			self->m_max_width_entry_weight = 10;
 			self->m_max_width_entry_effective_weight = 10;
 			self->m_max_width_condition_field = 10;
 			self->m_max_width_condition_match_type = 10;
@@ -2207,6 +2214,9 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_filter_id).m_buf)); col.cx = 80;
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_id, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_id);
+
+			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_weight).m_buf)); col.cx = 80;
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_weight, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_weight);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_effective_weight).m_buf)); col.cx = 80;
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_effective_weight, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_effective_weight);
@@ -2310,6 +2320,10 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						{
 							disp_info->item.pszText = ((LPWSTR)(nstr_to_wstr(value_to_nstr_uint64(&entry->filterId)).m_buf));
 						}
+						else if(disp_info->item.iSubItem == mk_col_id_entry_e_weight)
+						{
+							disp_info->item.pszText = ((LPWSTR)(value_to_wstr_value(&entry->weight).m_buf));
+						}
 						else if(disp_info->item.iSubItem == mk_col_id_entry_e_effective_weight)
 						{
 							disp_info->item.pszText = ((LPWSTR)(value_to_wstr_value(&entry->effectiveWeight).m_buf));
@@ -2357,6 +2371,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_action, &self->m_max_width_entry_action);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_callout, &self->m_max_width_entry_callout);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_id, &self->m_max_width_entry_id);
+						set_max_col_width(self->m_entries, mk_col_id_entry_e_weight, &self->m_max_width_entry_weight);
 						set_max_col_width(self->m_entries, mk_col_id_entry_e_effective_weight, &self->m_max_width_entry_effective_weight);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						item = changed->iItem;
