@@ -1223,28 +1223,28 @@ struct mk_fw_s
 };
 typedef struct mk_fw_s mk_fw_t;
 
-enum mk_cols_entry_e
+enum mk_col_id_entry_e
 {
-	mk_cols_entry_e_filter,
-	mk_cols_entry_e_name,
-	mk_cols_entry_e_description,
-	mk_cols_entry_e_provider,
-	mk_cols_entry_e_layer,
-	mk_cols_entry_e_sub_layer,
-	mk_cols_entry_e_action,
-	mk_cols_entry_e_dummy_end
+	mk_col_id_entry_e_filter,
+	mk_col_id_entry_e_name,
+	mk_col_id_entry_e_description,
+	mk_col_id_entry_e_provider,
+	mk_col_id_entry_e_layer,
+	mk_col_id_entry_e_sub_layer,
+	mk_col_id_entry_e_action,
+	mk_col_id_entry_e_dummy_end
 };
-typedef enum mk_cols_entry_e mk_cols_entry_t;
+typedef enum mk_col_id_entry_e mk_col_id_entry_t;
 
-enum mk_cols_condition_e
+enum mk_col_id_condition_e
 {
-	mk_cols_condition_e_field,
-	mk_cols_condition_e_match_type,
-	mk_cols_condition_e_value_type,
-	mk_cols_condition_e_value_data,
-	mk_cols_condition_e_dummy_end
+	mk_col_id_condition_e_field,
+	mk_col_id_condition_e_match_type,
+	mk_col_id_condition_e_value_type,
+	mk_col_id_condition_e_value_data,
+	mk_col_id_condition_e_dummy_end
 };
-typedef enum mk_cols_condition_e mk_cols_condition_t;
+typedef enum mk_col_id_condition_e mk_col_id_condition_t;
 
 enum mk_wnd_sub_window_id_e
 {
@@ -2083,47 +2083,47 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_filter).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_filter, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_filter);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_filter, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_filter);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_name).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_name, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_name);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_name, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_name);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_description).m_buf)); col.cx = 180;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_description, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_description);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_description, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_description);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_provider).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_provider, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_provider);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_provider, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_provider);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_layer).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_layer, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_layer);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_layer, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_layer);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_sublayer).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_sub_layer, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_sub_layer);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_sub_layer, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_sub_layer);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_action).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_cols_entry_e_action, ((LPARAM)(&col))); mk_assert(lr == mk_cols_entry_e_action);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_action, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_action);
 
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
 
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_filter, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_provider, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_cols_entry_e_sub_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_col_id_entry_e_filter, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_col_id_entry_e_provider, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_col_id_entry_e_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_col_id_entry_e_sub_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 
 			self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_entries);
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_field).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_cols_condition_e_field, ((LPARAM)(&col))); mk_assert(lr == mk_cols_condition_e_field);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_field, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_field);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_match_type).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_cols_condition_e_match_type, ((LPARAM)(&col))); mk_assert(lr == mk_cols_condition_e_match_type);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_match_type, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_match_type);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_type).m_buf)); col.cx = 80;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_cols_condition_e_value_type, ((LPARAM)(&col))); mk_assert(lr == mk_cols_condition_e_value_type);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_value_type, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_value_type);
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_value).m_buf)); col.cx = 200;
-			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_cols_condition_e_value_data, ((LPARAM)(&col))); mk_assert(lr == mk_cols_condition_e_value_data);
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_value_data, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_value_data);
 		break;
 		case WM_DESTROY:
 			g_app.m_funcs_user.m_pfn_PostQuitMessage(0);
@@ -2166,31 +2166,31 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						entry = self->m_fw->m_entries[item];
 						mask &=~ LVIF_TEXT;
 						if(false){}
-						else if(disp_info->item.iSubItem == mk_cols_entry_e_filter)
+						else if(disp_info->item.iSubItem == mk_col_id_entry_e_filter)
 						{
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&entry->filterKey).m_buf));
 						}
-						else if(disp_info->item.iSubItem == mk_cols_entry_e_name)
+						else if(disp_info->item.iSubItem == mk_col_id_entry_e_name)
 						{
 							disp_info->item.pszText = entry->displayData.name;
 						}
-						else if(disp_info->item.iSubItem == mk_cols_entry_e_description)
+						else if(disp_info->item.iSubItem == mk_col_id_entry_e_description)
 						{
 							disp_info->item.pszText = entry->displayData.description;
 						}
-						else if(disp_info->item.iSubItem == mk_cols_entry_e_provider)
+						else if(disp_info->item.iSubItem == mk_col_id_entry_e_provider)
 						{
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(entry->providerKey).m_buf));
 						}
-						else if(disp_info->item.iSubItem == mk_cols_entry_e_layer)
+						else if(disp_info->item.iSubItem == mk_col_id_entry_e_layer)
 						{
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&entry->layerKey).m_buf));
 						}
-						else if(disp_info->item.iSubItem == mk_cols_entry_e_sub_layer)
+						else if(disp_info->item.iSubItem == mk_col_id_entry_e_sub_layer)
 						{
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&entry->subLayerKey).m_buf));
 						}
-						else if(disp_info->item.iSubItem == mk_cols_entry_e_action)
+						else if(disp_info->item.iSubItem == mk_col_id_entry_e_action)
 						{
 							disp_info->item.pszText = ((LPWSTR)(action_type_to_wstr(entry->action.type).m_buf));
 						}
@@ -2230,11 +2230,11 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 					if((changed->iItem != -1) && ((changed->uNewState & LVIS_SELECTED) != 0))
 					{
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
-						set_max_col_width(self->m_entries, mk_cols_entry_e_filter, &self->m_max_width_entry_filter);
-						set_max_col_width(self->m_entries, mk_cols_entry_e_provider, &self->m_max_width_entry_provider);
-						set_max_col_width(self->m_entries, mk_cols_entry_e_layer, &self->m_max_width_entry_layer);
-						set_max_col_width(self->m_entries, mk_cols_entry_e_sub_layer, &self->m_max_width_entry_sub_layer);
-						set_max_col_width(self->m_entries, mk_cols_entry_e_action, &self->m_max_width_entry_action);
+						set_max_col_width(self->m_entries, mk_col_id_entry_e_filter, &self->m_max_width_entry_filter);
+						set_max_col_width(self->m_entries, mk_col_id_entry_e_provider, &self->m_max_width_entry_provider);
+						set_max_col_width(self->m_entries, mk_col_id_entry_e_layer, &self->m_max_width_entry_layer);
+						set_max_col_width(self->m_entries, mk_col_id_entry_e_sub_layer, &self->m_max_width_entry_sub_layer);
+						set_max_col_width(self->m_entries, mk_col_id_entry_e_action, &self->m_max_width_entry_action);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						item = changed->iItem;
 						mk_assert(item >= 0);
@@ -2243,9 +2243,9 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 						entry = self->m_fw->m_entries[item];
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETITEMCOUNT, entry->numFilterConditions, 0); mk_assert(lr != 0);
-						set_max_col_width(self->m_conditions, mk_cols_condition_e_field, &self->m_max_width_condition_field);
-						set_max_col_width(self->m_conditions, mk_cols_condition_e_match_type, &self->m_max_width_condition_match_type);
-						set_max_col_width(self->m_conditions, mk_cols_condition_e_value_type, &self->m_max_width_condition_value_type);
+						set_max_col_width(self->m_conditions, mk_col_id_condition_e_field, &self->m_max_width_condition_field);
+						set_max_col_width(self->m_conditions, mk_col_id_condition_e_match_type, &self->m_max_width_condition_match_type);
+						set_max_col_width(self->m_conditions, mk_col_id_condition_e_value_type, &self->m_max_width_condition_value_type);
 						b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
 						lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, WM_SETREDRAW, TRUE, 0); mk_assert(lr == 0);
 						b = g_app.m_funcs_user.m_pfn_UpdateWindow(self->m_conditions); mk_assert(b);
@@ -2266,19 +2266,19 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 					if((mask & LVIF_TEXT) != 0)
 					{
 						mask &=~ LVIF_TEXT;
-						if(disp_info->item.iSubItem == mk_cols_condition_e_field)
+						if(disp_info->item.iSubItem == mk_col_id_condition_e_field)
 						{
 							disp_info->item.pszText = ((LPWSTR)(guid_to_text(&condition->fieldKey).m_buf));
 						}
-						else if(disp_info->item.iSubItem == mk_cols_condition_e_match_type)
+						else if(disp_info->item.iSubItem == mk_col_id_condition_e_match_type)
 						{
 							disp_info->item.pszText = ((LPWSTR)(match_type_to_text(condition->matchType).m_buf));
 						}
-						else if(disp_info->item.iSubItem == mk_cols_condition_e_value_type)
+						else if(disp_info->item.iSubItem == mk_col_id_condition_e_value_type)
 						{
 							disp_info->item.pszText = ((LPWSTR)(type_to_text(condition->conditionValue.type).m_buf));
 						}
-						else if(disp_info->item.iSubItem == mk_cols_condition_e_value_data)
+						else if(disp_info->item.iSubItem == mk_col_id_condition_e_value_data)
 						{
 							disp_info->item.pszText = ((LPWSTR)(condition_value_to_text(&condition->conditionValue).m_buf));
 						}
