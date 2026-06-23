@@ -515,6 +515,7 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(description, "Description") \
 	x(effective_weight, "Effective Weight") \
 	x(empty, "") \
+	x(every_ipv4, "Every single one IPv4 address.") \
 	x(field, "Field") \
 	x(filter, "Filter") \
 	x(filter_id, "Filter ID") \
@@ -522,6 +523,10 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(fire_wall, "FireWall") \
 	x(fmt_arr16, "[%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x]") \
 	x(fmt_ipv4, "%d.%d.%d.%d") \
+	x(fmt_ipv4_mask_08, "%d/%d (%d.%d.%d.%d - %d.%d.%d.%d)") \
+	x(fmt_ipv4_mask_16, "%d.%d/%d (%d.%d.%d.%d - %d.%d.%d.%d)") \
+	x(fmt_ipv4_mask_24, "%d.%d.%d/%d (%d.%d.%d.%d - %d.%d.%d.%d)") \
+	x(fmt_ipv4_mask_32, "%d.%d.%d.%d/%d (%d.%d.%d.%d - %d.%d.%d.%d)") \
 	x(fmt_ipv6_mask_128, "%x:%x:%x:%x:%x:%x:%x:%x/%d") \
 	x(fmt_ipv6_mask_32, "%x:%x::/%d") \
 	x(fmt_ipv6_mask_48, "%x:%x:%x::/%d") \
@@ -2120,8 +2125,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	b = g_app.m_funcs_advapi.m_pfn_ConvertSidToStringSidW(((PSID)(sid)), &txt_sid); mk_assert(b);
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	len = g_app.m_funcs_ntdll.m_pfn_wcslen(txt_sid);
-	ptr = mk_memcpy(buf, txt_sid, len); ((void)(ptr));
-	buf[len] = L'\0';
+	ptr = mk_memcpy(buf, txt_sid, len + 1); ((void)(ptr));
 	hloc = g_app.m_funcs_kernel.m_pfn_LocalFree(txt_sid); mk_assert(!hloc);
 	wstr.m_buf = buf;
 	wstr.m_len = len;
@@ -2494,6 +2498,121 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	return nstr;
 }
 
+[[nodiscard]] static inline mk_view_nstr_t ip_address_v4_range_to_nstr(FWP_CONDITION_VALUE0 const* const range)
+{
+	int same_bits;
+	int n;
+	int i;
+	char* buf;
+	int cap;
+	mk_view_nstr_t fmt;
+	unsigned char parts_a[4];
+	unsigned char parts_b[4];
+	unsigned char mask;
+	int len;
+	mk_view_nstr_t nstr;
+
+	mk_assert(range);
+
+	same_bits = 0;
+	n = 32;
+	for(i = 0; i != n; ++i)
+	{
+		if
+		(
+			(range->rangeValue->valueLow .uint32 & (((UINT32)(1u)) << ((32 - 1) - i))) ==
+			(range->rangeValue->valueHigh.uint32 & (((UINT32)(1u)) << ((32 - 1) - i)))
+		)
+		{
+			++same_bits;
+		}
+		else
+		{
+			break;
+		}
+	}
+	if(false){}
+	else if(same_bits == 0)
+	{
+		nstr = nstr_to_nstr(k_konst.m_nstr_every_ipv4);
+	}
+	else if(same_bits > 0 && same_bits <= 8)
+	{
+		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		cap = _countof(g_app.m_tmp_nstrs[0]);
+		fmt = nstr_to_nstr(k_konst.m_nstr_fmt_ipv4_mask_08);
+		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
+		parts_b[0] = parts_a[0]; parts_b[1] = parts_a[1]; parts_b[2] = parts_a[2]; parts_b[3] = parts_a[3];
+		mask = (((1u << (same_bits - 0)) - 1) << (CHAR_BIT - (same_bits - 0)));
+		parts_a[0] &= mask;
+		parts_a[1] = 0x00;
+		parts_a[2] = 0x00;
+		parts_a[3] = 0x00;
+		parts_b[0] |=~ mask;
+		parts_b[1] = 0xff;
+		parts_b[2] = 0xff;
+		parts_b[3] = 0xff;
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_a[0], same_bits, parts_a[0], parts_a[1], parts_a[2], parts_a[3], parts_b[0], parts_b[1], parts_b[2], parts_b[3]); mk_assert(len >= 1); mk_assert(len < cap);
+		nstr.m_buf = buf;
+		nstr.m_len = len;
+	}
+	else if(same_bits > 8 && same_bits <= 16)
+	{
+		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		cap = _countof(g_app.m_tmp_nstrs[0]);
+		fmt = nstr_to_nstr(k_konst.m_nstr_fmt_ipv4_mask_16);
+		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
+		parts_b[0] = parts_a[0]; parts_b[1] = parts_a[1]; parts_b[2] = parts_a[2]; parts_b[3] = parts_a[3];
+		mask = (((1u << (same_bits - 8)) - 1) << (CHAR_BIT - (same_bits - 8)));
+		parts_a[1] &= mask;
+		parts_a[2] = 0x00;
+		parts_a[3] = 0x00;
+		parts_b[1] |=~ mask;
+		parts_b[2] = 0xff;
+		parts_b[3] = 0xff;
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_a[0], parts_a[1], same_bits, parts_a[0], parts_a[1], parts_a[2], parts_a[3], parts_b[0], parts_b[1], parts_b[2], parts_b[3]); mk_assert(len >= 1); mk_assert(len < cap);
+		nstr.m_buf = buf;
+		nstr.m_len = len;
+	}
+	else if(same_bits > 16 && same_bits <= 24)
+	{
+		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		cap = _countof(g_app.m_tmp_nstrs[0]);
+		fmt = nstr_to_nstr(k_konst.m_nstr_fmt_ipv4_mask_24);
+		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
+		parts_b[0] = parts_a[0]; parts_b[1] = parts_a[1]; parts_b[2] = parts_a[2]; parts_b[3] = parts_a[3];
+		mask = (((1u << (same_bits - 16)) - 1) << (CHAR_BIT - (same_bits - 16)));
+		parts_a[2] &= mask;
+		parts_a[3] = 0x00;
+		parts_b[2] |=~ mask;
+		parts_b[3] = 0xff;
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_a[0], parts_a[1], parts_a[2], same_bits, parts_a[0], parts_a[1], parts_a[2], parts_a[3], parts_b[0], parts_b[1], parts_b[2], parts_b[3]); mk_assert(len >= 1); mk_assert(len < cap);
+		nstr.m_buf = buf;
+		nstr.m_len = len;
+	}
+	else if(same_bits > 24 && same_bits <= 32)
+	{
+		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		cap = _countof(g_app.m_tmp_nstrs[0]);
+		fmt = nstr_to_nstr(k_konst.m_nstr_fmt_ipv4_mask_32);
+		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
+		parts_b[0] = parts_a[0]; parts_b[1] = parts_a[1]; parts_b[2] = parts_a[2]; parts_b[3] = parts_a[3];
+		mask = (((1u << (same_bits - 24)) - 1) << (CHAR_BIT - (same_bits - 24)));
+		parts_a[3] &= mask;
+		parts_b[3] |=~ mask;
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_a[0], parts_a[1], parts_a[2], parts_a[3], same_bits, parts_a[0], parts_a[1], parts_a[2], parts_a[3], parts_b[0], parts_b[1], parts_b[2], parts_b[3]); mk_assert(len >= 1); mk_assert(len < cap);
+		nstr.m_buf = buf;
+		nstr.m_len = len;
+	}
+	else
+	{
+		nstr = nstr_to_nstr(k_konst.m_nstr_empty);
+	}
+	mk_assert(nstr.m_len >= 0);
+	mk_assert(nstr.m_buf[nstr.m_len] == '\0');
+	return nstr;
+}
+
 [[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_note(FWPM_FILTER_CONDITION0 const* const condition)
 {
 	mk_view_wstr_t wstr;
@@ -2518,6 +2637,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 115)){ wstr = nstr_to_wstr(k_konst.m_nstr_protocol_l2tp       ); }
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_UINT32)){ wstr = nstr_to_wstr(ip_address_v4_to_nstr(condition->conditionValue.uint32)); }
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_RANGE_TYPE) && (condition->conditionValue.rangeValue->valueLow.type == FWP_BYTE_ARRAY16_TYPE) && (condition->conditionValue.rangeValue->valueHigh.type == FWP_BYTE_ARRAY16_TYPE)){ wstr = nstr_to_wstr(ip_address_v6_range_to_nstr(&condition->conditionValue)); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_RANGE_TYPE) && (condition->conditionValue.rangeValue->valueLow.type == FWP_UINT32) && (condition->conditionValue.rangeValue->valueHigh.type == FWP_UINT32)){ wstr = nstr_to_wstr(ip_address_v4_range_to_nstr(&condition->conditionValue)); }
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
 	return wstr;
