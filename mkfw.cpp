@@ -318,6 +318,9 @@ struct mk_view_t<t, 0>
 	size_t m_len;
 };
 
+typedef typename mk_view_t<CHAR, 0> mk_view_nstr_t;
+typedef typename mk_view_t<WCHAR, 0> mk_view_wstr_t;
+
 template<typename t, size_t n>
 [[nodiscard]] bool operator==(mk_view_t<t, n> const& a, mk_view_t<t, n> const& b)
 {
@@ -356,7 +359,7 @@ template<typename t, size_t n>
 	return end;
 }
 
-[[nodiscard]] static inline LPWSTR mk_memcpy(LPWSTR const dst, mk_view_t<WCHAR, 0> const& src)
+[[nodiscard]] static inline LPWSTR mk_memcpy(LPWSTR const dst, mk_view_wstr_t const& src)
 {
 	return mk_memcpy(dst, src.m_buf, src.m_len);
 }
@@ -1508,12 +1511,12 @@ static inline void fw_destroy(mk_fw_t* const fw)
 	dw = g_app.m_funcs_fw.m_pfn_FwpmEngineClose0(fw->m_eng); mk_assert(dw == ERROR_SUCCESS);
 }
 
-[[nodiscard]] static inline mk_view_t<CHAR, 0> nstr_to_nstr(LPCSTR const win_str, int const len)
+[[nodiscard]] static inline mk_view_nstr_t nstr_to_nstr(LPCSTR const win_str, int const len)
 {
 	LPSTR buf;
 	int n;
 	int i;
-	mk_view_t<CHAR, 0> nstr;
+	mk_view_nstr_t nstr;
 
 	mk_assert(len < _countof(g_app.m_tmp_nstrs[0]));
 
@@ -1532,17 +1535,17 @@ static inline void fw_destroy(mk_fw_t* const fw)
 }
 
 template<size_t n>
-[[nodiscard]] static inline mk_view_t<CHAR, 0> nstr_to_nstr(std::array<char, n> const& arr)
+[[nodiscard]] static inline mk_view_nstr_t nstr_to_nstr(std::array<char, n> const& arr)
 {
 	return nstr_to_nstr(arr.data(), ((int)(arr.size())));
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> nstr_to_wstr(mk_view_t<char, 0> const& nstr)
+[[nodiscard]] static inline mk_view_wstr_t nstr_to_wstr(mk_view_nstr_t const& nstr)
 {
 	LPWSTR buf;
 	SIZE_T n;
 	SIZE_T i;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(nstr.m_len >= 0);
 	mk_assert(nstr.m_len < _countof(g_app.m_tmp_wstrs[0]));
@@ -1561,12 +1564,12 @@ template<size_t n>
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> nstr_to_wstr(LPCSTR const nstr, int const len)
+[[nodiscard]] static inline mk_view_wstr_t nstr_to_wstr(LPCSTR const nstr, int const len)
 {
 	LPWSTR buf;
 	int n;
 	int i;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	n = len;
@@ -1583,12 +1586,12 @@ template<size_t n>
 }
 
 template<size_t nn>
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> nstr_to_wstr(std::array<char, nn> const& arr)
+[[nodiscard]] static inline mk_view_wstr_t nstr_to_wstr(std::array<char, nn> const& arr)
 {
 	LPWSTR buf;
 	int n;
 	int i;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	n = nn;
@@ -1604,9 +1607,9 @@ template<size_t nn>
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> wstr_to_wstr(LPCWSTR const win_str)
+[[nodiscard]] static inline mk_view_wstr_t wstr_to_wstr(LPCWSTR const win_str)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	if(win_str)
 	{
@@ -1628,11 +1631,11 @@ template<typename t, size_t n>
 	return nstr_to_wstr(view.m_buf, ((int)(n)));
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> guid_to_wstr(GUID const* const guid)
+[[nodiscard]] static inline mk_view_wstr_t guid_to_wstr(GUID const* const guid)
 {
 	int cap;
 	LPWSTR buf;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 	int len;
 
 	mk_assert(guid);
@@ -1695,12 +1698,12 @@ static inline void mkfw_load_all(PPEB const peb)
 	g_app.m_funcs_ntdll.m_pfn_memset(g_app.m_tmp_wstrs, 0x00, sizeof(g_app.m_tmp_wstrs));
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> guid_to_text(GUID const* const guid)
+[[nodiscard]] static inline mk_view_wstr_t guid_to_text(GUID const* const guid)
 {
 	int n;
 	int i;
 	GUID const* ggg;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	static_assert(std::size(k_konst.m_guids.m_guids.m_guids) + 1 == std::size(k_konst.m_guids.m_desc_offs));
 
@@ -1749,9 +1752,9 @@ static inline void mkfw_load_all(PPEB const peb)
 	return is;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> guid_to_text_not_null(GUID const* const guid)
+[[nodiscard]] static inline mk_view_wstr_t guid_to_text_not_null(GUID const* const guid)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(guid);
 
@@ -1768,13 +1771,13 @@ static inline void mkfw_load_all(PPEB const peb)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> match_type_to_text(FWP_MATCH_TYPE const match_type)
+[[nodiscard]] static inline mk_view_wstr_t match_type_to_text(FWP_MATCH_TYPE const match_type)
 {
 	int offa;
 	int offb;
 	int len;
 	LPCSTR nstr;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	if(((int)(match_type)) >= 0 && ((int)(match_type)) < ((int)(matches_get_count_v)))
 	{
@@ -1793,7 +1796,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> type_to_text(FWP_DATA_TYPE const type)
+[[nodiscard]] static inline mk_view_wstr_t type_to_text(FWP_DATA_TYPE const type)
 {
 	int idx;
 	int i;
@@ -1801,7 +1804,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	int offb;
 	int len;
 	LPCSTR nstr;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	idx = 0;
 	i = 0;
@@ -1829,13 +1832,13 @@ static inline void mkfw_load_all(PPEB const peb)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<char, 0> value_to_nstr_uint8(UINT8 const u8)
+[[nodiscard]] static inline mk_view_nstr_t value_to_nstr_uint8(UINT8 const u8)
 {
 	char* fmt;
 	char* buf;
 	int cap;
 	int len;
-	mk_view_t<char, 0> view;
+	mk_view_nstr_t view;
 
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
@@ -1848,13 +1851,13 @@ static inline void mkfw_load_all(PPEB const peb)
 	return view;
 }
 
-[[nodiscard]] static inline mk_view_t<char, 0> value_to_nstr_uint16(UINT16 const u16)
+[[nodiscard]] static inline mk_view_nstr_t value_to_nstr_uint16(UINT16 const u16)
 {
 	char* fmt;
 	char* buf;
 	int cap;
 	int len;
-	mk_view_t<char, 0> view;
+	mk_view_nstr_t view;
 
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
@@ -1870,13 +1873,13 @@ static inline void mkfw_load_all(PPEB const peb)
 	return view;
 }
 
-[[nodiscard]] static inline mk_view_t<char, 0> value_to_nstr_uint32(UINT32 const u32)
+[[nodiscard]] static inline mk_view_nstr_t value_to_nstr_uint32(UINT32 const u32)
 {
 	char* fmt;
 	char* buf;
 	int cap;
 	int len;
-	mk_view_t<char, 0> view;
+	mk_view_nstr_t view;
 
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
@@ -1889,13 +1892,13 @@ static inline void mkfw_load_all(PPEB const peb)
 	return view;
 }
 
-[[nodiscard]] static inline mk_view_t<char, 0> value_to_nstr_uint64(UINT64 const* const u64)
+[[nodiscard]] static inline mk_view_nstr_t value_to_nstr_uint64(UINT64 const* const u64)
 {
 	char* fmt;
 	char* buf;
 	int cap;
 	int len;
-	mk_view_t<char, 0> view;
+	mk_view_nstr_t view;
 
 	mk_assert(u64);
 
@@ -1936,11 +1939,11 @@ static inline void mkfw_load_all(PPEB const peb)
 	return is;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> value_to_wstr_blob(FWP_BYTE_BLOB const* const blob)
+[[nodiscard]] static inline mk_view_wstr_t value_to_wstr_blob(FWP_BYTE_BLOB const* const blob)
 {
 	LPCWSTR buf;
 	SIZE_T len;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(blob);
 
@@ -1979,14 +1982,14 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	}
 }
 
-[[nodiscard]] static inline mk_view_t<char, 0> value_to_nstr_arr16(FWP_BYTE_ARRAY16 const* const arr16)
+[[nodiscard]] static inline mk_view_nstr_t value_to_nstr_arr16(FWP_BYTE_ARRAY16 const* const arr16)
 {
 	char* fmt;
 	char* buf;
 	int cap;
 	USHORT parts[8];
 	int len;
-	mk_view_t<char, 0> view;
+	mk_view_nstr_t view;
 
 	mk_assert(arr16);
 
@@ -2002,13 +2005,13 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return view;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> value_to_wstr_sd(FWP_BYTE_BLOB const* const sd)
+[[nodiscard]] static inline mk_view_wstr_t value_to_wstr_sd(FWP_BYTE_BLOB const* const sd)
 {
 	BOOL b;
 	LPWSTR win_buf;
 	SIZE_T len;
 	LPWSTR buf;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(sd);
 
@@ -2025,7 +2028,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> value_to_wstr_sid(SID const* const sid)
+[[nodiscard]] static inline mk_view_wstr_t value_to_wstr_sid(SID const* const sid)
 {
 	BOOL b;
 	LPWSTR txt_sid;
@@ -2033,7 +2036,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	SIZE_T len;
 	LPWSTR ptr;
 	HLOCAL hloc;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(sid);
 
@@ -2050,9 +2053,9 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> value_to_wstr_value(FWP_VALUE0 const* const value)
+[[nodiscard]] static inline mk_view_wstr_t value_to_wstr_value(FWP_VALUE0 const* const value)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(value);
 
@@ -2086,16 +2089,16 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> value_to_wstr_range(FWP_RANGE0 const* const range)
+[[nodiscard]] static inline mk_view_wstr_t value_to_wstr_range(FWP_RANGE0 const* const range)
 {
-	mk_view_t<WCHAR, 0> lo_wstr;
-	mk_view_t<WCHAR, 0> hi_wstr;
-	mk_view_t<WCHAR, 0> txt_from;
-	mk_view_t<WCHAR, 0> txt_to;
+	mk_view_wstr_t lo_wstr;
+	mk_view_wstr_t hi_wstr;
+	mk_view_wstr_t txt_from;
+	mk_view_wstr_t txt_to;
 	LPWSTR buf;
 	LPWSTR ptr;
 	SIZE_T len;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(range);
 
@@ -2118,9 +2121,9 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_value_to_text(FWP_CONDITION_VALUE0 const* const value)
+[[nodiscard]] static inline mk_view_wstr_t condition_value_to_text(FWP_CONDITION_VALUE0 const* const value)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	switch(value->type)
 	{
@@ -2160,7 +2163,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<CHAR, 0> action_type_to_nstr(FWP_ACTION_TYPE const action_type)
+[[nodiscard]] static inline mk_view_nstr_t action_type_to_nstr(FWP_ACTION_TYPE const action_type)
 {
 	int idx;
 	int i;
@@ -2169,7 +2172,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	int len;
 	char const* bufa;
 	char* bufb;
-	mk_view_t<CHAR, 0> nstr;
+	mk_view_nstr_t nstr;
 
 	idx = -1;
 	i = 0;
@@ -2201,14 +2204,14 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return nstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> action_type_to_wstr(FWP_ACTION_TYPE const action_type)
+[[nodiscard]] static inline mk_view_wstr_t action_type_to_wstr(FWP_ACTION_TYPE const action_type)
 {
 	return nstr_to_wstr(action_type_to_nstr(action_type));
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> entry_to_wstr(FWPM_FILTER0 const* const entry, mk_col_id_entry_t const col_id)
+[[nodiscard]] static inline mk_view_wstr_t entry_to_wstr(FWPM_FILTER0 const* const entry, mk_col_id_entry_t const col_id)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(entry);
 	mk_assert(col_id >= 0);
@@ -2235,9 +2238,9 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_filed(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_filed(FWPM_FILTER_CONDITION0 const* const condition)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(condition);
 
@@ -2247,9 +2250,9 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_match_type(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_match_type(FWPM_FILTER_CONDITION0 const* const condition)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(condition);
 
@@ -2259,9 +2262,9 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_value_type(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_value_type(FWPM_FILTER_CONDITION0 const* const condition)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(condition);
 
@@ -2271,9 +2274,9 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_value_data(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_value_data(FWPM_FILTER_CONDITION0 const* const condition)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(condition);
 
@@ -2297,14 +2300,14 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	}
 }
 
-[[nodiscard]] static inline mk_view_t<CHAR, 0> ip_address_v4_to_nstr(UINT32 const u32)
+[[nodiscard]] static inline mk_view_nstr_t ip_address_v4_to_nstr(UINT32 const u32)
 {
 	char* fmt;
 	char* buf;
 	int cap;
 	unsigned char parts[4];
 	int len;
-	mk_view_t<CHAR, 0> nstr;
+	mk_view_nstr_t nstr;
 
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
@@ -2320,7 +2323,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	return nstr;
 }
 
-[[nodiscard]] static inline mk_view_t<CHAR, 0> ip_address_v6_range_to_nstr(FWP_CONDITION_VALUE0 const* const range)
+[[nodiscard]] static inline mk_view_nstr_t ip_address_v6_range_to_nstr(FWP_CONDITION_VALUE0 const* const range)
 {
 	int same_bits;
 	int n;
@@ -2332,7 +2335,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	int cap;
 	USHORT parts[8];
 	int len;
-	mk_view_t<char, 0> nstr;
+	mk_view_nstr_t nstr;
 
 	mk_assert(range);
 
@@ -2414,9 +2417,9 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	return nstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_note(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_note(FWPM_FILTER_CONDITION0 const* const condition)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(condition);
 
@@ -2443,9 +2446,9 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_t<WCHAR, 0> condition_entry_to_wstr_any(FWPM_FILTER_CONDITION0 const* const condition, mk_col_id_condition_t const col_id)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_any(FWPM_FILTER_CONDITION0 const* const condition, mk_col_id_condition_t const col_id)
 {
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(condition);
 	mk_assert(col_id >= 0);
@@ -2476,10 +2479,10 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	FWPM_FILTER0 const* entry_b;
 	bool direction;
 	mk_col_id_entry_t col_id;
-	mk_view_t<WCHAR, 0> txt_a;
-	mk_view_t<WCHAR, 0> txt_b;
-	mk_view_t<WCHAR, 0>* txt_aa;
-	mk_view_t<WCHAR, 0>* txt_bb;
+	mk_view_wstr_t txt_a;
+	mk_view_wstr_t txt_b;
+	mk_view_wstr_t* txt_aa;
+	mk_view_wstr_t* txt_bb;
 	int cmp;
 
 	mk_assert(a);
@@ -2743,7 +2746,7 @@ static inline void mkfw_wnd_proc__notify_entries__getdispinfow_text(mk_wnd_t* co
 	FWPM_FILTER0* entry;
 	int col_idx;
 	mk_col_id_entry_t col_id;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(self);
 	mk_assert(self->m_sort_ints);
@@ -2890,7 +2893,7 @@ static inline void mkfw_wnd_proc__notify_conditions__getdispinfow_text(mk_wnd_t*
 	FWPM_FILTER_CONDITION0* condition;
 	int col_idx;
 	mk_col_id_condition_t col_id;
-	mk_view_t<WCHAR, 0> wstr;
+	mk_view_wstr_t wstr;
 
 	mk_assert(self);
 	mk_assert(self->m_fw);
