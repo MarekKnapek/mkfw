@@ -6,7 +6,10 @@
 :mk_inner
 @echo off
 call :mk_delete "%~dp0memcpy_amd64.obj" || goto :mk_bad
+call :mk_delete "%~dp0memcpy_i386.obj" || goto :mk_bad
+call :mk_delete "%~dp0mkfw.amd64.exe" || goto :mk_bad
 call :mk_delete "%~dp0mkfw.exe" || goto :mk_bad
+call :mk_delete "%~dp0mkfw.i386.exe" || goto :mk_bad
 call :mk_delete "%~dp0mkfw.obj" || goto :mk_bad
 goto :mk_gud
 

@@ -1,3 +1,6 @@
 /memcpy_amd64.obj
+/memcpy_i386.obj
+/mkfw.amd64.exe
 /mkfw.exe
+/mkfw.i386.exe
 /mkfw.obj

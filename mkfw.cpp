@@ -9,6 +9,22 @@
 #include <array>
 #include <tuple>
 
+#if defined _MSC_VER && defined _M_X64 && defined _M_AMD64
+#define mk_arch_is_i386 0
+#define mk_arch_is_amd64 1
+#elif defined _MSC_VER && defined _M_IX86 && !defined _M_I86 && !defined M_I86
+#define mk_arch_is_i386 1
+#define mk_arch_is_amd64 0
+#endif
+
+#if mk_arch_is_i386
+#define m_pfn_GetWindowLongPtrW m_pfn_GetWindowLongW
+#define m_pfn_SetWindowLongPtrW m_pfn_SetWindowLongW
+#elif mk_arch_is_amd64
+#define m_pfn_GetWindowLongPtrW m_pfn_GetWindowLongPtrW
+#define m_pfn_SetWindowLongPtrW m_pfn_SetWindowLongPtrW
+#endif
+
 #if defined DEBUG || defined _DEBUG
 void mk_crash(void){ int volatile* volatile ptr; ptr = NULL; *ptr = 0; }
 #define mk_assert(x) (((x)) ? ((void)(0)) : ((void)(__debugbreak(), mk_crash())))
@@ -176,11 +192,15 @@ static inline HMODULE find_module(PPEB const& peb, DWORD const& k_hash)
 
 static inline LPVOID va_to_real(HMODULE const& mod, PIMAGE_SECTION_HEADER const& sections, WORD const& count, DWORD const& va, DWORD const& sz)
 {
+	#if mk_arch_is_i386
+	return ((LPVOID)(((LPBYTE)(mod)) + va));
+	#elif mk_arch_is_amd64
 	LPVOID real;
 	LPBYTE base;
 	WORD n;
 	WORD i;
 	DWORD sec_va;
+	DWORD sec_sz;
 	DWORD raw;
 
 	real = NULL;
@@ -189,7 +209,8 @@ static inline LPVOID va_to_real(HMODULE const& mod, PIMAGE_SECTION_HEADER const&
 	for(i = 0; i != n; ++i)
 	{
 		sec_va = sections[i].VirtualAddress;
-		if(va >= sec_va && va + sz <= sec_va + sections->SizeOfRawData)
+		sec_sz = sections[i].SizeOfRawData;
+		if(va >= sec_va && va + sz <= sec_va + sec_sz)
 		{
 			raw = sections[i].PointerToRawData + (va - sec_va);
 			real = base + raw;
@@ -197,6 +218,7 @@ static inline LPVOID va_to_real(HMODULE const& mod, PIMAGE_SECTION_HEADER const&
 		}
 	}
 	return real;
+	#endif
 }
 
 [[nodiscard]] static inline int mk_str_len(LPCSTR const str)
@@ -418,6 +440,31 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(FwpmFilterEnum0) \
 	x(FwpmFreeMemory0) \
 
+#if mk_arch_is_i386
+#define mk_x_user_funcs() \
+	x(CreateWindowExW) \
+	x(DefWindowProcW) \
+	x(DispatchMessageW) \
+	x(GetClientRect) \
+	x(GetMessageW) \
+	x(GetWindowLongW) \
+	x(InvalidateRect) \
+	x(LoadCursorW) \
+	x(LoadIconW) \
+	x(MessageBoxW) \
+	x(MoveWindow) \
+	x(PeekMessageW) \
+	x(PostMessageW) \
+	x(PostQuitMessage) \
+	x(RegisterClassExW) \
+	x(SendMessageW) \
+	x(SetFocus) \
+	x(SetWindowLongW) \
+	x(ShowWindow) \
+	x(TranslateMessage) \
+	x(UpdateWindow) \
+
+#elif mk_arch_is_amd64
 #define mk_x_user_funcs() \
 	x(CreateWindowExW) \
 	x(DefWindowProcW) \
@@ -440,6 +487,8 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(ShowWindow) \
 	x(TranslateMessage) \
 	x(UpdateWindow) \
+
+#endif
 
 #define mk_x_comctl_funcs() \
 	x(InitCommonControls) \
