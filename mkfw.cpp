@@ -361,6 +361,7 @@ template<typename t, size_t n>
 }
 
 #define mk_x_dlls_all() \
+	x(exe)\
 	x(ntdll)\
 	x(kernel32)\
 	x(advapi32)\
@@ -1437,15 +1438,18 @@ struct mk_funcs_comctl_s
 };
 typedef struct mk_funcs_comctl_s mk_funcs_comctl_t;
 
+struct mk_dlls_s
+{
+	#define x(name) HMODULE m_##name;
+	mk_x_dlls_all()
+	#undef x
+};
+typedef struct mk_dlls_s mk_dlls_t;
+
 struct mk_app_s
 {
 	PPEB m_peb;
-	HMODULE m_dll_exe;
-	HMODULE m_dll_ntdll;
-	HMODULE m_dll_kernel;
-	#define x(name) HMODULE m_dll_##name;
-	mk_x_dlls_to_load()
-	#undef x
+	mk_dlls_t m_dlls;
 	mk_funcs_ntdll_t m_funcs_ntdll;
 	mk_funcs_kernel_t m_funcs_kernel;
 	mk_funcs_advapi_t m_funcs_advapi;
@@ -1637,43 +1641,43 @@ static inline void mkfw_load_all(PPEB const peb)
 	mk_assert(peb);
 
 	g_app.m_peb = peb;
-	g_app.m_dll_ntdll = find_module(peb, k_konst.m_hash_ntdll); mk_assert(g_app.m_dll_ntdll);
-	g_app.m_dll_kernel = find_module(peb, k_konst.m_hash_kernel32dll); mk_assert(g_app.m_dll_kernel);
+	g_app.m_dlls.m_ntdll = find_module(peb, k_konst.m_hash_ntdll); mk_assert(g_app.m_dlls.m_ntdll);
+	g_app.m_dlls.m_kernel32 = find_module(peb, k_konst.m_hash_kernel32dll); mk_assert(g_app.m_dlls.m_kernel32);
 
-	#define x(name) g_app.m_funcs_ntdll.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_ntdll, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_ntdll.m_pfn_##name);
+	#define x(name) g_app.m_funcs_ntdll.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_ntdll, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_ntdll.m_pfn_##name);
 	mk_x_ntdll_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_kernel.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_kernel, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_kernel.m_pfn_##name);
+	#define x(name) g_app.m_funcs_kernel.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_kernel32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_kernel.m_pfn_##name);
 	mk_x_kernel_funcs()
 	#undef x
 
-	#define x(name) g_app.m_dll_##name = g_app.m_funcs_kernel.m_pfn_LoadLibraryExA(nstr_to_nstr(k_konst.m_nstr_##name).m_buf, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32); mk_assert(g_app.m_dll_##name);
+	#define x(name) g_app.m_dlls.m_##name = g_app.m_funcs_kernel.m_pfn_LoadLibraryExA(nstr_to_nstr(k_konst.m_nstr_##name).m_buf, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32); mk_assert(g_app.m_dlls.m_##name);
 	mk_x_dlls_to_load()
 	#undef x
 
-	#define x(name) g_app.m_funcs_advapi.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_advapi32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_advapi.m_pfn_##name);
+	#define x(name) g_app.m_funcs_advapi.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_advapi32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_advapi.m_pfn_##name);
 	mk_x_advapi_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_combase.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_combase, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_combase.m_pfn_##name);
+	#define x(name) g_app.m_funcs_combase.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_combase, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_combase.m_pfn_##name);
 	mk_x_combase_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_fw.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_fwpuclnt, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_fw.m_pfn_##name);
+	#define x(name) g_app.m_funcs_fw.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_fwpuclnt, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_fw.m_pfn_##name);
 	mk_x_fw_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_user.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_user32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_user.m_pfn_##name);
+	#define x(name) g_app.m_funcs_user.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_user32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_user.m_pfn_##name);
 	mk_x_user_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_comctl.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dll_comctl32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_comctl.m_pfn_##name);
+	#define x(name) g_app.m_funcs_comctl.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_comctl32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_comctl.m_pfn_##name);
 	mk_x_comctl_funcs()
 	#undef x
 
 	g_app.m_funcs_comctl.m_pfn_InitCommonControls();
-	g_app.m_dll_exe = g_app.m_funcs_kernel.m_pfn_GetModuleHandleW(NULL);
+	g_app.m_dlls.m_exe = g_app.m_funcs_kernel.m_pfn_GetModuleHandleW(NULL);
 
 	g_app.m_funcs_ntdll.m_pfn_memset(g_app.m_tmp_nstrs, 0x00, sizeof(g_app.m_tmp_nstrs));
 	g_app.m_funcs_ntdll.m_pfn_memset(g_app.m_tmp_wstrs, 0x00, sizeof(g_app.m_tmp_wstrs));
@@ -2633,7 +2637,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 				}
 			}
 
-			self->m_entries = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_entries);
+			self->m_entries = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dlls.m_exe, NULL); mk_assert(self->m_entries);
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_filter).m_buf)); col.cx = 80;
@@ -2676,7 +2680,7 @@ static LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM co
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_col_id_entry_e_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_col_id_entry_e_sub_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 
-			self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dll_exe, NULL); mk_assert(self->m_entries);
+			self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dlls.m_exe, NULL); mk_assert(self->m_entries);
 			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
 
 			col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_field).m_buf)); col.cx = 80;
@@ -2898,7 +2902,7 @@ extern "C" DWORD __stdcall mk_entry(PPEB const peb)
 	wnd_cls_info.lpfnWndProc = &mkfw_wnd_proc;
 	wnd_cls_info.cbClsExtra = 0;
 	wnd_cls_info.cbWndExtra = sizeof(mk_wnd_t*);
-	wnd_cls_info.hInstance = g_app.m_dll_exe;
+	wnd_cls_info.hInstance = g_app.m_dlls.m_exe;
 	wnd_cls_info.hIcon = g_app.m_funcs_user.m_pfn_LoadIconW(NULL, IDI_APPLICATION);
 	wnd_cls_info.hCursor = g_app.m_funcs_user.m_pfn_LoadCursorW(NULL, IDC_ARROW);
 	wnd_cls_info.hbrBackground = ((HBRUSH)(COLOR_APPWORKSPACE + 1));
@@ -2907,7 +2911,7 @@ extern "C" DWORD __stdcall mk_entry(PPEB const peb)
 	wnd_cls_info.hIconSm = g_app.m_funcs_user.m_pfn_LoadIconW(NULL, IDI_APPLICATION);
 	wnd_cls_atom = g_app.m_funcs_user.m_pfn_RegisterClassExW(&wnd_cls_info); mk_assert(wnd_cls_atom);
 	g_app.m_fw_wnd.m_fw = &g_app.m_fw;
-	hwnd = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_APPWINDOW, ((LPCWSTR)(wnd_cls_atom)), nstr_to_wstr(k_konst.m_nstr_fire_wall).m_buf, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, g_app.m_dll_exe, &g_app.m_fw_wnd); mk_assert(hwnd);
+	hwnd = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_APPWINDOW, ((LPCWSTR)(wnd_cls_atom)), nstr_to_wstr(k_konst.m_nstr_fire_wall).m_buf, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, g_app.m_dlls.m_exe, &g_app.m_fw_wnd); mk_assert(hwnd);
 	b = g_app.m_funcs_user.m_pfn_ShowWindow(hwnd, SW_SHOWDEFAULT); ((void)(b));
 	for(;;)
 	{
