@@ -398,6 +398,7 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(GetModuleHandleW) \
 	x(GetProcessHeap) \
 	x(HeapAlloc) \
+	x(HeapFree) \
 	x(LoadLibraryExA) \
 	x(LocalFree) \
 
@@ -2586,6 +2587,10 @@ static inline void sort_entries(void)
 		hdr_item.fmt |= ((unsigned int)(direction ? HDF_SORTUP : HDF_SORTDOWN));
 		hdr_item.mask = HDI_FORMAT;
 		b = ((BOOL)(g_app.m_funcs_user.m_pfn_SendMessageW(hdr_win, HDM_SETITEM, col_id, ((LPARAM)(&hdr_item))))); mk_assert(b);
+		sort_col = win->m_entries_sort_col;
+		win->m_entries_sort_col = mk_col_id_entry_e_filter + 1;
+		g_app.m_funcs_ntdll.m_pfn_qsort(win->m_sort_ints, n, sizeof(int), &sort_compare_entries);
+		win->m_entries_sort_col = sort_col;
 		g_app.m_funcs_ntdll.m_pfn_qsort(win->m_sort_ints, n, sizeof(int), &sort_compare_entries);
 	}
 	else
@@ -2597,6 +2602,43 @@ static inline void sort_entries(void)
 	}
 	b = g_app.m_funcs_user.m_pfn_InvalidateRect(hdr_win, NULL, TRUE); mk_assert(b);
 	b = g_app.m_funcs_user.m_pfn_InvalidateRect(win->m_entries, NULL, TRUE); mk_assert(b);
+}
+
+static inline void mkfw_wnd_refresh(mk_wnd_t* self)
+{
+	DWORD dw;
+	HANDLE enm;
+	BOOL b;
+	int n;
+	int i;
+	LRESULT lr;
+
+	mk_assert(self);
+
+	g_app.m_funcs_fw.m_pfn_FwpmFreeMemory0(((void**)(&self->m_fw->m_entries)));
+	dw = g_app.m_funcs_fw.m_pfn_FwpmEngineClose0(self->m_fw->m_eng); mk_assert(dw == ERROR_SUCCESS);
+
+	dw = g_app.m_funcs_fw.m_pfn_FwpmEngineOpen0(NULL, RPC_C_AUTHN_DEFAULT, NULL, NULL, &self->m_fw->m_eng); mk_assert(dw == ERROR_SUCCESS);
+	dw = g_app.m_funcs_fw.m_pfn_FwpmFilterCreateEnumHandle0(self->m_fw->m_eng, NULL, &enm); mk_assert(dw == ERROR_SUCCESS);
+	dw = g_app.m_funcs_fw.m_pfn_FwpmFilterEnum0(self->m_fw->m_eng, enm, k_count, &self->m_fw->m_entries, &self->m_fw->m_count); mk_assert(dw == ERROR_SUCCESS);
+	dw = g_app.m_funcs_fw.m_pfn_FwpmFilterDestroyEnumHandle0(self->m_fw->m_eng, enm); mk_assert(dw == ERROR_SUCCESS);
+
+	b = g_app.m_funcs_kernel.m_pfn_HeapFree(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, self->m_sort_ints); mk_assert(b);
+	self->m_sort_ints = NULL;
+	if(!self->m_sort_ints)
+	{
+		n = ((int)(self->m_fw->m_count));
+		self->m_sort_ints = ((int*)(g_app.m_funcs_kernel.m_pfn_HeapAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, n * sizeof(int)))); mk_assert(self->m_sort_ints);
+		for(i = 0; i != n; ++i)
+		{
+			self->m_sort_ints[i] = i;
+		}
+	}
+	self->m_entry_idx_sorted = mk_min(self->m_entry_idx_sorted, n);
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
+	b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_entries, NULL, TRUE); mk_assert(b);
+	b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
+	sort_entries();
 }
 
 static inline void set_max_col_width(HWND const hwnd, int const col_idx, int* const max_storage)
@@ -2699,7 +2741,7 @@ static inline void mkfw_wnd__proc__create(mk_wnd_t* const self, HWND const hwnd,
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_col_id_entry_e_sub_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 
 	self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstr_wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstr_empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dlls.m_exe, NULL); mk_assert(self->m_entries);
-	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT); ((void)(lr));
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP); ((void)(lr));
 
 	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_field).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_field, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_field);
@@ -2894,7 +2936,6 @@ static inline void mkfw_wnd_proc__notify_entries__columnclick(mk_wnd_t* const se
 		}
 		else
 		{
-			mk_assert(self->m_entries_sort_col == 0);
 			self->m_entries_sort_col = col_idx + 1;
 		}
 		sort_entries();
@@ -2955,6 +2996,7 @@ static inline void mkfw_wnd_proc__notify_entries___keydown_del(mk_wnd_t* const s
 			ok_text = nstr_to_wstr(k_konst.m_nstr_delete_ok_text);
 			ok_caption = nstr_to_wstr(k_konst.m_nstr_delete_ok_caption);
 			res = g_app.m_funcs_user.m_pfn_MessageBoxW(self->m_hwnd, ok_text.m_buf, ok_caption.m_buf, MB_OK | MB_ICONINFORMATION); ((void)(res));
+			mkfw_wnd_refresh(self);
 		}
 		else
 		{
@@ -2963,15 +3005,21 @@ static inline void mkfw_wnd_proc__notify_entries___keydown_del(mk_wnd_t* const s
 	}
 }
 
+static inline void mkfw_wnd_proc__notify_entries___keydown_f5(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	mkfw_wnd_refresh(self);
+}
+
 static inline void mkfw_wnd_proc__notify_entries__keydown(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
 	LPNMLVKEYDOWN keydown;
 
 	keydown = ((LPNMLVKEYDOWN)(lparam));
 	mk_assert(keydown);
-	if(keydown->wVKey == VK_DELETE)
+	switch(keydown->wVKey)
 	{
-		mkfw_wnd_proc__notify_entries___keydown_del(self, hwnd, msg, wparam, lparam, out_call_def, out_lr);
+		case VK_DELETE: mkfw_wnd_proc__notify_entries___keydown_del(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case VK_F5    : mkfw_wnd_proc__notify_entries___keydown_f5(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 	}
 }
 
