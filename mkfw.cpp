@@ -388,6 +388,11 @@ template<typename t, size_t n>
 	x(wcslen) \
 	x(wcsncmp) \
 
+extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
+
+#define mk_x_ntdll2_funcs() \
+	x(swprintf, mk_fn_swprintf) \
+
 #define mk_x_kernel_funcs() \
 	x(ExitProcess) \
 	x(GetModuleHandleW) \
@@ -407,6 +412,7 @@ template<typename t, size_t n>
 	x(FwpmEngineClose0) \
 	x(FwpmEngineOpen0) \
 	x(FwpmFilterCreateEnumHandle0) \
+	x(FwpmFilterDeleteByKey0) \
 	x(FwpmFilterDestroyEnumHandle0) \
 	x(FwpmFilterEnum0) \
 	x(FwpmFreeMemory0) \
@@ -421,6 +427,7 @@ template<typename t, size_t n>
 	x(InvalidateRect) \
 	x(LoadCursorW) \
 	x(LoadIconW) \
+	x(MessageBoxW) \
 	x(MoveWindow) \
 	x(PeekMessageW) \
 	x(PostMessageW) \
@@ -451,6 +458,10 @@ template<typename t, size_t n>
 
 #define mk_x_nstrings() \
 	x(action, "Action") \
+	x(delete_caption, "Delete?") \
+	x(delete_fmt, "Do you want to delete this FireWall filter?\x0d\x0a%s") \
+	x(delete_ok_caption, "Delete.") \
+	x(delete_ok_text, "Succesfully deleted FireWall filter.") \
 	x(description, "Description") \
 	x(effective_weight, "Effective Weight") \
 	x(empty, "") \
@@ -1262,11 +1273,17 @@ typedef struct action_types_texts_s action_types_texts_t;
 #define x(name) typedef decltype(&name) tfn_##name;
 mk_x_all_funcs()
 #undef x
+#define x(namea, nameb) typedef decltype(&nameb) tfn_##namea;
+mk_x_ntdll2_funcs()
+#undef x
 
 struct mk_konst_s
 {
 	#define x(name) DWORD m_hash_##name;
 	mk_x_all_funcs()
+	#undef x
+	#define x(namea, nameb) DWORD m_hash_##namea;
+	mk_x_ntdll2_funcs()
 	#undef x
 
 	#define x(name, value) DWORD m_hash_##name;
@@ -1294,6 +1311,9 @@ typedef struct mk_konst_s mk_konst_t;
 
 	#define x(name) konst.m_hash_##name = fnv1a(#name);
 	mk_x_all_funcs()
+	#undef x
+	#define x(namea, nameb) konst.m_hash_##namea = fnv1a(#namea);
+	mk_x_ntdll2_funcs()
 	#undef x
 
 	#define x(name, value) konst.m_hash_##name = fnv1a(value);
@@ -1402,6 +1422,10 @@ struct mk_funcs_ntdll_s
 	#define x(name) tfn_##name m_pfn_##name;
 	mk_x_ntdll_funcs()
 	#undef x
+	#define x(namea, nameb) tfn_##namea m_pfn_##namea;
+	mk_x_ntdll2_funcs()
+	#undef x
+
 };
 typedef struct mk_funcs_ntdll_s mk_funcs_ntdll_t;
 
@@ -1661,6 +1685,9 @@ static inline void mkfw_load_all(PPEB const peb)
 
 	#define x(name) g_app.m_funcs_ntdll.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_ntdll, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_ntdll.m_pfn_##name);
 	mk_x_ntdll_funcs()
+	#undef x
+	#define x(namea, nameb) g_app.m_funcs_ntdll.m_pfn_##namea = ((tfn_##namea)(find_proc(peb, g_app.m_dlls.m_ntdll, k_konst.m_hash_##namea))); mk_assert(g_app.m_funcs_ntdll.m_pfn_##namea);
+	mk_x_ntdll2_funcs()
 	#undef x
 
 	#define x(name) g_app.m_funcs_kernel.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_kernel32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_kernel.m_pfn_##name);
@@ -2874,6 +2901,80 @@ static inline void mkfw_wnd_proc__notify_entries__columnclick(mk_wnd_t* const se
 	}
 }
 
+static inline void mkfw_wnd_delete_selected_entry(mk_wnd_t* const self, LPDWORD const res)
+{
+	FWPM_FILTER0* entry;
+	DWORD dw;
+
+	mk_assert(self);
+	mk_assert(res);
+
+	entry = self->m_fw->m_entries[self->m_entry_idx_sorted];
+	dw = g_app.m_funcs_fw.m_pfn_FwpmFilterDeleteByKey0(self->m_fw->m_eng, &entry->filterKey);
+	*res = dw;
+}
+
+[[nodiscard]] static inline mk_view_wstr_t mkfw_wnd_get_del_question(mk_wnd_t* const self)
+{
+	mk_view_wstr_t name;
+	mk_view_wstr_t fmt;
+	LPWSTR buf;
+	int cap;
+	int len;
+	mk_view_wstr_t wstr;
+
+	name = entry_to_wstr(self->m_fw->m_entries[self->m_entry_idx_sorted], mk_col_id_entry_e_filter);
+	fmt = nstr_to_wstr(k_konst.m_nstr_delete_fmt);
+	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
+	cap = _countof(g_app.m_tmp_wstrs[0]);
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(buf, fmt.m_buf, name.m_buf); mk_assert(len >= 1); mk_assert(len < cap);
+	wstr.m_buf = buf;
+	wstr.m_len = len;
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+static inline void mkfw_wnd_proc__notify_entries___keydown_del(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	mk_view_wstr_t question_text;
+	mk_view_wstr_t question_caption;
+	int res;
+	DWORD dw;
+	mk_view_wstr_t ok_text;
+	mk_view_wstr_t ok_caption;
+
+	question_text = mkfw_wnd_get_del_question(self);
+	question_caption = nstr_to_wstr(k_konst.m_nstr_delete_caption);
+	res = g_app.m_funcs_user.m_pfn_MessageBoxW(self->m_hwnd, question_text.m_buf, question_caption.m_buf, MB_YESNO | MB_DEFBUTTON2 | MB_ICONQUESTION);
+	if(res == IDYES)
+	{
+		mkfw_wnd_delete_selected_entry(self, &dw);
+		if(dw == ERROR_SUCCESS)
+		{
+			ok_text = nstr_to_wstr(k_konst.m_nstr_delete_ok_text);
+			ok_caption = nstr_to_wstr(k_konst.m_nstr_delete_ok_caption);
+			res = g_app.m_funcs_user.m_pfn_MessageBoxW(self->m_hwnd, ok_text.m_buf, ok_caption.m_buf, MB_OK | MB_ICONINFORMATION); ((void)(res));
+		}
+		else
+		{
+			/* todo show error */
+		}
+	}
+}
+
+static inline void mkfw_wnd_proc__notify_entries__keydown(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	LPNMLVKEYDOWN keydown;
+
+	keydown = ((LPNMLVKEYDOWN)(lparam));
+	mk_assert(keydown);
+	if(keydown->wVKey == VK_DELETE)
+	{
+		mkfw_wnd_proc__notify_entries___keydown_del(self, hwnd, msg, wparam, lparam, out_call_def, out_lr);
+	}
+}
+
 static inline void mkfw_wnd_proc__notify_entries(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
 	LPNMHDR nm_hdr;
@@ -2883,6 +2984,7 @@ static inline void mkfw_wnd_proc__notify_entries(mk_wnd_t* const self, HWND cons
 	else if(nm_hdr->code == LVN_GETDISPINFOW){ mkfw_wnd_proc__notify_entries__getdispinfow(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 	else if(nm_hdr->code == LVN_ITEMCHANGED ){ mkfw_wnd_proc__notify_entries__itemchanged (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 	else if(nm_hdr->code == LVN_COLUMNCLICK ){ mkfw_wnd_proc__notify_entries__columnclick (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
+	else if(nm_hdr->code == LVN_KEYDOWN     ){ mkfw_wnd_proc__notify_entries__keydown     (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 }
 
 static inline void mkfw_wnd_proc__notify_conditions__getdispinfow_text(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
