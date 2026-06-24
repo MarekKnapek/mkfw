@@ -372,7 +372,7 @@ template<typename t, size_t n>
 
 	mk_assert(dst);
 	mk_assert(src);
-	mk_assert(cnt >= 1);
+	mk_assert(cnt >= 0);
 	mk_assert((dst + cnt <= src) || (dst >= src + cnt));
 	mk_assert((src + cnt <= dst) || (src >= dst + cnt));
 
@@ -419,6 +419,9 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(ExitProcess) \
 	x(GetModuleHandleW) \
 	x(GetProcessHeap) \
+	x(GlobalAlloc) \
+	x(GlobalLock) \
+	x(GlobalUnlock) \
 	x(HeapAlloc) \
 	x(HeapFree) \
 	x(LoadLibraryExA) \
@@ -442,49 +445,67 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 
 #if mk_arch_is_i386
 #define mk_x_user_funcs() \
+	x(ClientToScreen) \
+	x(CloseClipboard) \
+	x(CreatePopupMenu) \
 	x(CreateWindowExW) \
 	x(DefWindowProcW) \
+	x(DestroyMenu) \
 	x(DispatchMessageW) \
+	x(EmptyClipboard) \
 	x(GetClientRect) \
 	x(GetMessageW) \
 	x(GetWindowLongW) \
+	x(InsertMenuItemW) \
 	x(InvalidateRect) \
 	x(LoadCursorW) \
 	x(LoadIconW) \
 	x(MessageBoxW) \
 	x(MoveWindow) \
+	x(OpenClipboard) \
 	x(PeekMessageW) \
 	x(PostMessageW) \
 	x(PostQuitMessage) \
 	x(RegisterClassExW) \
 	x(SendMessageW) \
+	x(SetClipboardData) \
 	x(SetFocus) \
 	x(SetWindowLongW) \
 	x(ShowWindow) \
+	x(TrackPopupMenu) \
 	x(TranslateMessage) \
 	x(UpdateWindow) \
 
 #elif mk_arch_is_amd64
 #define mk_x_user_funcs() \
+	x(ClientToScreen) \
+	x(CloseClipboard) \
+	x(CreatePopupMenu) \
 	x(CreateWindowExW) \
 	x(DefWindowProcW) \
+	x(DestroyMenu) \
 	x(DispatchMessageW) \
+	x(EmptyClipboard) \
 	x(GetClientRect) \
 	x(GetMessageW) \
 	x(GetWindowLongPtrW) \
+	x(InsertMenuItemW) \
 	x(InvalidateRect) \
 	x(LoadCursorW) \
 	x(LoadIconW) \
 	x(MessageBoxW) \
 	x(MoveWindow) \
+	x(OpenClipboard) \
 	x(PeekMessageW) \
 	x(PostMessageW) \
 	x(PostQuitMessage) \
 	x(RegisterClassExW) \
 	x(SendMessageW) \
+	x(SetClipboardData) \
 	x(SetFocus) \
 	x(SetWindowLongPtrW) \
 	x(ShowWindow) \
+	x(TrackPopupMenu) \
 	x(TranslateMessage) \
 	x(UpdateWindow) \
 
@@ -536,6 +557,10 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(fmt_u8, "0x%02x (%d)") \
 	x(layer, "Layer") \
 	x(match_type, "Match Type") \
+	x(menu_copy_line, "Copy Row") \
+	x(menu_copy_name, "Copy Name") \
+	x(menu_copy_table, "Copy Table") \
+	x(menu_copy_value, "Copy Value") \
 	x(mkfw, "mkfw") \
 	x(name, "Name") \
 	x(none, "[ none ]") \
@@ -559,6 +584,7 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(range_from, "From: ") \
 	x(range_to, " To: ") \
 	x(sublayer, "Sub Layer") \
+	x(tab, "\x09") \
 	x(type, "Type") \
 	x(value, "Value") \
 	x(weight, "Weight") \
@@ -1434,6 +1460,15 @@ enum mk_wnd_sub_window_id_e
 };
 typedef enum mk_wnd_sub_window_id_e mk_wnd_sub_window_id_t;
 
+enum menu_id_e
+{
+	menu_id_e_copy_cell,
+	menu_id_e_copy_line,
+	menu_id_e_copy_table,
+	menu_id_e_dummy_end
+};
+typedef enum menu_id_e menu_id_t;
+
 struct mk_max_width_cols_entries_s
 {
 	int m_filter;
@@ -1462,11 +1497,13 @@ struct mk_wnd_s
 	HWND m_hwnd;
 	HWND m_entries;
 	HWND m_conditions;
+	HMENU m_menu;
 	mk_fw_t* m_fw;
 	mk_wnd_sub_window_id_t m_last_sub_window_focus;
 	int m_entry_idx_sorted;
 	int m_entries_sort_col;
 	int* m_sort_ints;
+	int m_condition_idx;
 	mk_max_width_cols_entries_t m_max_entries;
 	mk_max_width_cols_conditions_t m_max_conditions;
 };
@@ -2666,6 +2703,43 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	return wstr;
 }
 
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_line(FWPM_FILTER_CONDITION0 const* const condition)
+{
+	int cap;
+	LPWSTR buf;
+	int len;
+	int n;
+	int i;
+	mk_col_id_condition_e col_id;
+	mk_view_wstr_t wstr;
+	LPWSTR ptr;
+
+	mk_assert(condition);
+
+	cap = _countof(g_app.m_tmp_wstrs[0]);
+	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
+	len = 0;
+	n = mk_col_id_condition_e_dummy_end;
+	for(i = 0; i != n; ++i)
+	{
+		col_id = ((mk_col_id_condition_e)(i));
+		wstr = condition_entry_to_wstr_any(condition, col_id);
+		mk_assert(len + wstr.m_len < cap);
+		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
+		len += ((int)(wstr.m_len));
+		wstr = nstr_to_wstr(k_konst.m_nstr_tab);
+		mk_assert(len + wstr.m_len < cap);
+		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
+		len += ((int)(wstr.m_len));
+	}
+	buf[len] = L'\0';
+	wstr.m_buf = buf;
+	wstr.m_len = len;
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
 [[nodiscard]] static inline int __cdecl sort_compare_entries(void const* const a, void const* const b)
 {
 	int aa;
@@ -2837,11 +2911,13 @@ static inline void mkfw_wnd__proc__create(mk_wnd_t* const self, HWND const hwnd,
 	self->m_hwnd = hwnd;
 	self->m_entries = NULL;
 	self->m_conditions = NULL;
+	self->m_menu = NULL;
 	self->m_fw;
 	self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_entries;
 	self->m_entry_idx_sorted = 0;
 	self->m_entries_sort_col = 0;
 	self->m_sort_ints = NULL;
+	self->m_condition_idx = 0;
 	self->m_max_entries.m_filter = 10;
 	self->m_max_entries.m_provider = 10;
 	self->m_max_entries.m_layer = 10;
@@ -3280,6 +3356,70 @@ static inline void mkfw_wnd_proc__notify_conditions__itemchanged(mk_wnd_t* const
 	self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_conditions;
 }
 
+static inline void mkfw_wnd_proc__notify_conditions___keydown_apps(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	HMENU menu;
+	BOOL b;
+	MENUITEMINFOW mi;
+	LRESULT lr;
+	RECT rect;
+	int selected_idx;
+	POINT pt;
+
+	menu = g_app.m_funcs_user.m_pfn_CreatePopupMenu(); mk_assert(menu);
+	if(self->m_menu)
+	{
+		b = g_app.m_funcs_user.m_pfn_DestroyMenu(self->m_menu); mk_assert(b);
+	}
+	self->m_menu = menu;
+
+	mi.cbSize = sizeof(mi);
+	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
+	mi.fType = MFT_STRING;
+	mi.wID = menu_id_e_copy_line;
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_menu_copy_line).m_buf));
+	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_line, FALSE, &mi); mk_assert(b);
+
+	mi.cbSize = sizeof(mi);
+	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
+	mi.fType = MFT_STRING;
+	mi.wID = menu_id_e_copy_table;
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_menu_copy_table).m_buf));
+	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_table, FALSE, &mi); mk_assert(b);
+
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETSELECTEDCOUNT, 0, 0);
+	if(lr == 1)
+	{
+		rect.left = LVIR_LABEL;
+		lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETSELECTIONMARK, 0, 0); selected_idx = ((int)(lr));
+		lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETITEMRECT, selected_idx, ((LPARAM)(&rect))); mk_assert(lr != 0);
+		self->m_condition_idx = selected_idx;
+
+		pt.x = rect.left + ((rect.right - rect.left) / 2);
+		pt.y = rect.top + ((rect.bottom - rect.top) / 2);
+		b = g_app.m_funcs_user.m_pfn_ClientToScreen(self->m_conditions, &pt); mk_assert(b);
+		b = g_app.m_funcs_user.m_pfn_TrackPopupMenu(menu, 0, pt.x, pt.y, 0, self->m_hwnd, NULL); mk_assert(b);
+	}
+}
+
+static inline void mkfw_wnd_proc__notify_conditions___keydown_f5(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	mkfw_wnd_refresh(self);
+}
+
+static inline void mkfw_wnd_proc__notify_conditions__keydown(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	LPNMLVKEYDOWN keydown;
+
+	keydown = ((LPNMLVKEYDOWN)(lparam));
+	mk_assert(keydown);
+	switch(keydown->wVKey)
+	{
+		case VK_APPS: mkfw_wnd_proc__notify_conditions___keydown_apps(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case VK_F5  : mkfw_wnd_proc__notify_conditions___keydown_f5  (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+	}
+}
+
 static inline void mkfw_wnd_proc__notify_conditions(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
 	LPNMHDR nm_hdr;
@@ -3288,6 +3428,7 @@ static inline void mkfw_wnd_proc__notify_conditions(mk_wnd_t* const self, HWND c
 	if(false){}
 	else if(nm_hdr->code == LVN_GETDISPINFOW){ mkfw_wnd_proc__notify_conditions__getdispinfow(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 	else if(nm_hdr->code == LVN_ITEMCHANGED ){ mkfw_wnd_proc__notify_conditions__itemchanged (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
+	else if(nm_hdr->code == LVN_KEYDOWN     ){ mkfw_wnd_proc__notify_conditions__keydown     (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 }
 
 static inline void mkfw_wnd__proc_notify(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
@@ -3299,6 +3440,70 @@ static inline void mkfw_wnd__proc_notify(mk_wnd_t* const self, HWND const hwnd, 
 	if(false){}
 	else if(nm_hdr->hwndFrom == self->m_entries   ){ mkfw_wnd_proc__notify_entries   (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 	else if(nm_hdr->hwndFrom == self->m_conditions){ mkfw_wnd_proc__notify_conditions(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
+}
+
+static inline void mkfw_wnd__proc__command__menu_copy_cell(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+}
+
+static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	int entry_idx;
+	FWPM_FILTER0* entry;
+	int condition_idx;
+	FWPM_FILTER_CONDITION0* condition;
+	mk_view_wstr_t wstr;
+
+	SIZE_T bytes_count;
+	HGLOBAL gl;
+	LPVOID ptr;
+	BOOL b;
+	HANDLE h;
+
+	entry_idx = self->m_entry_idx_sorted;
+	entry = self->m_fw->m_entries[entry_idx];
+	condition_idx = self->m_condition_idx;
+	condition = &entry->filterCondition[condition_idx];
+	wstr = condition_entry_to_wstr_line(condition);
+
+	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
+	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
+	ptr = g_app.m_funcs_kernel.m_pfn_GlobalLock(gl); mk_assert(ptr);
+	std::memcpy(ptr, wstr.m_buf, bytes_count);
+	b = g_app.m_funcs_kernel.m_pfn_GlobalUnlock(gl); mk_assert(b == 0 && GetLastError() == NO_ERROR);
+
+	b = g_app.m_funcs_user.m_pfn_OpenClipboard(self->m_conditions); mk_assert(b);
+	b = g_app.m_funcs_user.m_pfn_EmptyClipboard(); mk_assert(b);
+	h = g_app.m_funcs_user.m_pfn_SetClipboardData(CF_UNICODETEXT, gl); mk_assert(h);
+	b = g_app.m_funcs_user.m_pfn_CloseClipboard(); mk_assert(b);
+}
+
+static inline void mkfw_wnd__proc__command__menu_copy_table(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+}
+
+static inline void mkfw_wnd__proc__command_menu(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	int menu_idx;
+	menu_id_e menu_id;
+
+	menu_idx = LOWORD(wparam);
+	mk_assert(menu_idx >= 0);
+	mk_assert(menu_idx < menu_id_e_dummy_end);
+	menu_id = ((menu_id_e)(menu_idx));
+	switch(menu_id)
+	{
+		case menu_id_e_copy_cell : mkfw_wnd__proc__command__menu_copy_cell (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case menu_id_e_copy_line : mkfw_wnd__proc__command__menu_copy_line (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case menu_id_e_copy_table: mkfw_wnd__proc__command__menu_copy_table(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case menu_id_e_dummy_end: mk_assert(false); break;
+		default: mk_assert(false); break;
+	}
+}
+
+static inline void mkfw_wnd__proc_command(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	if(HIWORD(wparam) == 0 && lparam == 0){ mkfw_wnd__proc__command_menu(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 }
 
 [[nodiscard]] static inline LRESULT CALLBACK mkfw_wnd_proc(HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam)
@@ -3319,6 +3524,7 @@ static inline void mkfw_wnd__proc_notify(mk_wnd_t* const self, HWND const hwnd, 
 		case WM_SIZE    : mkfw_wnd__proc_size    (self, hwnd, msg, wparam, lparam, &call_def, &lr); break;
 		case WM_SETFOCUS: mkfw_wnd__proc_setfocus(self, hwnd, msg, wparam, lparam, &call_def, &lr); break;
 		case WM_NOTIFY  : mkfw_wnd__proc_notify  (self, hwnd, msg, wparam, lparam, &call_def, &lr); break;
+		case WM_COMMAND : mkfw_wnd__proc_command (self, hwnd, msg, wparam, lparam, &call_def, &lr); break;
 		break;
 	}
 	if(call_def)
