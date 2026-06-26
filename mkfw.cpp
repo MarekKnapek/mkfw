@@ -410,7 +410,7 @@ template<typename t, size_t n>
 	x(wcslen) \
 	x(wcsncmp) \
 
-extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
+int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 
 #define mk_x_ntdll2_funcs() \
 	x(swprintf, mk_fn_swprintf) \
@@ -424,6 +424,7 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(GlobalUnlock) \
 	x(HeapAlloc) \
 	x(HeapFree) \
+	x(HeapReAlloc) \
 	x(LoadLibraryExA) \
 	x(LocalFree) \
 
@@ -563,6 +564,7 @@ extern "C" int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(menu_copy_value, "Copy Value") \
 	x(mkfw, "mkfw") \
 	x(name, "Name") \
+	x(nl, "\x0d\x0a") \
 	x(none, "[ none ]") \
 	x(note, "Note") \
 	x(protocol_gre, "GRE") \
@@ -2179,28 +2181,13 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	switch(value->type)
 	{
-		case FWP_EMPTY:
-			wstr = nstr_to_wstr(k_konst.m_nstr_empty);
-		break;
-		case FWP_UINT8:
-			wstr = nstr_to_wstr(value_to_nstr_uint8(value->uint8));
-		break;
-		case FWP_UINT16:
-			wstr = nstr_to_wstr(value_to_nstr_uint16(value->uint16));
-		break;
-		case FWP_UINT32:
-			wstr = nstr_to_wstr(value_to_nstr_uint32(value->uint32));
-		break;
-		case FWP_UINT64:
-			wstr = nstr_to_wstr(value_to_nstr_uint64(value->uint64));
-		break;
-		case FWP_BYTE_ARRAY16_TYPE:
-			wstr = nstr_to_wstr(value_to_nstr_arr16(value->byteArray16));
-		break;
-		default:
-			mk_assert(("todo", false));
-			wstr = nstr_to_wstr(k_konst.m_nstr_questions);
-		break;
+		case FWP_EMPTY            : wstr = nstr_to_wstr(k_konst.m_nstr_empty);                    break;
+		case FWP_UINT8            : wstr = nstr_to_wstr(value_to_nstr_uint8(value->uint8));       break;
+		case FWP_UINT16           : wstr = nstr_to_wstr(value_to_nstr_uint16(value->uint16));     break;
+		case FWP_UINT32           : wstr = nstr_to_wstr(value_to_nstr_uint32(value->uint32));     break;
+		case FWP_UINT64           : wstr = nstr_to_wstr(value_to_nstr_uint64(value->uint64));     break;
+		case FWP_BYTE_ARRAY16_TYPE: wstr = nstr_to_wstr(value_to_nstr_arr16(value->byteArray16)); break;
+		default                   : wstr = nstr_to_wstr(k_konst.m_nstr_questions);                mk_assert(("todo", false)); break;
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2245,36 +2232,16 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	switch(value->type)
 	{
-		case FWP_UINT8:
-			wstr = nstr_to_wstr(value_to_nstr_uint8(value->uint8));
-		break;
-		case FWP_UINT16:
-			wstr = nstr_to_wstr(value_to_nstr_uint16(value->uint16));
-		break;
-		case FWP_UINT32:
-			wstr = nstr_to_wstr(value_to_nstr_uint32(value->uint32));
-		break;
-		case FWP_UINT64:
-			wstr = nstr_to_wstr(value_to_nstr_uint64(value->uint64));
-		break;
-		case FWP_BYTE_ARRAY16_TYPE:
-			wstr = nstr_to_wstr(value_to_nstr_arr16(value->byteArray16));
-		case FWP_BYTE_BLOB_TYPE:
-			wstr = value_to_wstr_blob(value->byteBlob);
-		break;
-		case FWP_SID:
-			wstr = value_to_wstr_sid(value->sid);
-		break;
-		case FWP_SECURITY_DESCRIPTOR_TYPE:
-			wstr = value_to_wstr_sd(value->sd);
-		break;
-		case FWP_RANGE_TYPE:
-			wstr = value_to_wstr_range(value->rangeValue);
-		break;
-		default:
-			mk_assert(("todo", false));
-			wstr = nstr_to_wstr(k_konst.m_nstr_questions);
-		break;
+		case FWP_UINT8                   : wstr = nstr_to_wstr(value_to_nstr_uint8(value->uint8));       break;
+		case FWP_UINT16                  : wstr = nstr_to_wstr(value_to_nstr_uint16(value->uint16));     break;
+		case FWP_UINT32                  : wstr = nstr_to_wstr(value_to_nstr_uint32(value->uint32));     break;
+		case FWP_UINT64                  : wstr = nstr_to_wstr(value_to_nstr_uint64(value->uint64));     break;
+		case FWP_BYTE_ARRAY16_TYPE       : wstr = nstr_to_wstr(value_to_nstr_arr16(value->byteArray16)); break;
+		case FWP_BYTE_BLOB_TYPE          : wstr = value_to_wstr_blob(value->byteBlob);                   break;
+		case FWP_SID                     : wstr = value_to_wstr_sid(value->sid);                         break;
+		case FWP_SECURITY_DESCRIPTOR_TYPE: wstr = value_to_wstr_sd(value->sd);                           break;
+		case FWP_RANGE_TYPE              : wstr = value_to_wstr_range(value->rangeValue);                break;
+		default                          : wstr = nstr_to_wstr(k_konst.m_nstr_questions);                mk_assert(("todo", false)); break;
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2306,6 +2273,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 		offa = k_konst.m_action_types.m_offs[idx + 0];
 		offb = k_konst.m_action_types.m_offs[idx + 1];
 		len = offb - offa;
+		mk_assert(len < _countof(g_app.m_tmp_nstrs[0]));
 		bufa = &k_konst.m_action_types.m_txt_buf[offa];
 		bufb = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		std::memcpy(bufb, bufa, len);
@@ -2716,18 +2684,61 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 
 	mk_assert(condition);
 
-	cap = _countof(g_app.m_tmp_wstrs[0]);
-	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
+	cap = 4 * 1024;
+	buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, cap))); mk_assert(buf);
 	len = 0;
 	n = mk_col_id_condition_e_dummy_end;
 	for(i = 0; i != n; ++i)
 	{
 		col_id = ((mk_col_id_condition_e)(i));
 		wstr = condition_entry_to_wstr_any(condition, col_id);
-		mk_assert(len + wstr.m_len < cap);
+		if(len + wstr.m_len + 32 > cap)
+		{
+			while(len + wstr.m_len + 32 > cap){ cap *= 2; }
+			buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapReAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, buf, cap))); mk_assert(buf);
+		}
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
 		wstr = nstr_to_wstr(k_konst.m_nstr_tab);
+		mk_assert(len + wstr.m_len < cap);
+		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
+		len += ((int)(wstr.m_len));
+	}
+	buf[len] = L'\0';
+	wstr.m_buf = buf;
+	wstr.m_len = len;
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_table(FWPM_FILTER0* const entry)
+{
+	int cap;
+	LPWSTR buf;
+	int len;
+	UINT32 n;
+	UINT32 i;
+	mk_view_wstr_t wstr;
+	LPWSTR ptr;
+
+	mk_assert(entry);
+
+	cap = 4 * 1024;
+	buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, cap))); mk_assert(buf);
+	len = 0;
+	n = entry->numFilterConditions;
+	for(i = 0; i != n; ++i)
+	{
+		wstr = condition_entry_to_wstr_line(&entry->filterCondition[i]);
+		if(len + wstr.m_len + 32 > cap)
+		{
+			while(len + wstr.m_len + 32 > cap){ cap *= 2; }
+			buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapReAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, buf, cap))); mk_assert(buf);
+		}
+		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
+		len += ((int)(wstr.m_len));
+		wstr = nstr_to_wstr(k_konst.m_nstr_nl);
 		mk_assert(len + wstr.m_len < cap);
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
@@ -3528,6 +3539,8 @@ static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self,
 	std::memcpy(ptr, wstr.m_buf, bytes_count);
 	b = g_app.m_funcs_kernel.m_pfn_GlobalUnlock(gl); mk_assert(b == 0 && GetLastError() == NO_ERROR);
 
+	b = g_app.m_funcs_kernel.m_pfn_HeapFree(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, ((LPVOID)(wstr.m_buf))); mk_assert(b);
+
 	b = g_app.m_funcs_user.m_pfn_OpenClipboard(self->m_conditions); mk_assert(b);
 	b = g_app.m_funcs_user.m_pfn_EmptyClipboard(); mk_assert(b);
 	h = g_app.m_funcs_user.m_pfn_SetClipboardData(CF_UNICODETEXT, gl); mk_assert(h);
@@ -3536,6 +3549,32 @@ static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self,
 
 static inline void mkfw_wnd__proc__command__menu_copy_table(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
+	int entry_idx;
+	FWPM_FILTER0* entry;
+	mk_view_wstr_t wstr;
+
+	SIZE_T bytes_count;
+	HGLOBAL gl;
+	LPVOID ptr;
+	BOOL b;
+	HANDLE h;
+
+	entry_idx = self->m_entry_idx_sorted;
+	entry = self->m_fw->m_entries[entry_idx];
+	wstr = condition_entry_to_wstr_table(entry);
+
+	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
+	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
+	ptr = g_app.m_funcs_kernel.m_pfn_GlobalLock(gl); mk_assert(ptr);
+	std::memcpy(ptr, wstr.m_buf, bytes_count);
+	b = g_app.m_funcs_kernel.m_pfn_GlobalUnlock(gl); mk_assert(b == 0 && GetLastError() == NO_ERROR);
+
+	b = g_app.m_funcs_kernel.m_pfn_HeapFree(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, ((LPVOID)(wstr.m_buf))); mk_assert(b);
+
+	b = g_app.m_funcs_user.m_pfn_OpenClipboard(self->m_conditions); mk_assert(b);
+	b = g_app.m_funcs_user.m_pfn_EmptyClipboard(); mk_assert(b);
+	h = g_app.m_funcs_user.m_pfn_SetClipboardData(CF_UNICODETEXT, gl); mk_assert(h);
+	b = g_app.m_funcs_user.m_pfn_CloseClipboard(); mk_assert(b);
 }
 
 static inline void mkfw_wnd__proc__command_menu(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
