@@ -2740,16 +2740,54 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	return wstr;
 }
 
+static inline void mk_col_id_entry_sort_collapse(mk_col_id_entry_t const col_id, bool const direction, int* const out_collapsed)
+{
+	int collapsed;
+
+	mk_assert(col_id >= 0);
+	mk_assert(col_id <= mk_col_id_entry_e_dummy_end);
+	mk_assert(direction == false || direction == true);
+	mk_assert(out_collapsed);
+
+	collapsed = 0;
+	if(col_id != mk_col_id_entry_e_dummy_end)
+	{
+		collapsed = ((int)(col_id)) + 1;
+		collapsed *= direction ? +1 : -1;
+	}
+	*out_collapsed = collapsed;
+}
+
+static inline void mk_col_id_entry_sort_expand(int const collapsed, mk_col_id_entry_t* const out_col_id, bool* const out_direction)
+{
+	mk_col_id_entry_t col_id;
+	bool direction;
+
+	mk_assert(collapsed >= -((int)(mk_col_id_entry_e_dummy_end)));
+	mk_assert(collapsed <= +((int)(mk_col_id_entry_e_dummy_end)));
+	mk_assert(out_col_id);
+	mk_assert(out_direction);
+
+	col_id = mk_col_id_entry_e_dummy_end;
+	direction = true;
+	if(collapsed != 0)
+	{
+		col_id = collapsed > 0 ? ((mk_col_id_entry_t)(collapsed - 1)) : ((mk_col_id_entry_t)(-collapsed - 1));
+		direction = collapsed > 0;
+	}
+	*out_col_id = col_id;
+	*out_direction = direction;
+}
+
 [[nodiscard]] static inline int __cdecl sort_compare_entries(void const* const a, void const* const b)
 {
 	int aa;
 	int bb;
 	mk_wnd_t* win;
-	int sort_col;
+	mk_col_id_entry_t col_id;
+	bool direction;
 	FWPM_FILTER0 const* entry_a;
 	FWPM_FILTER0 const* entry_b;
-	bool direction;
-	mk_col_id_entry_t col_id;
 	mk_view_wstr_t txt_a;
 	mk_view_wstr_t txt_b;
 	mk_view_wstr_t* txt_aa;
@@ -2762,89 +2800,102 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	aa = *((int const*)(a));
 	bb = *((int const*)(b));
 	win = &g_app.m_fw_wnd;
-	sort_col = win->m_entries_sort_col;
-	mk_assert(sort_col != 0);
-	entry_a = win->m_fw->m_entries[aa];
-	entry_b = win->m_fw->m_entries[bb];
-	if(sort_col > 0)
+	mk_col_id_entry_sort_expand(win->m_entries_sort_col, &col_id, &direction);
+	if(col_id != mk_col_id_entry_e_dummy_end)
 	{
-		direction = true;
-		col_id = ((mk_col_id_entry_t)(sort_col - 1));
+		entry_a = win->m_fw->m_entries[aa];
+		entry_b = win->m_fw->m_entries[bb];
+		cmp = 0;
+		if(cmp == 0)
+		{
+			txt_a = entry_to_wstr(entry_a, col_id);
+			txt_b = entry_to_wstr(entry_b, col_id);
+			txt_aa = direction ? &txt_a : &txt_b;
+			txt_bb = direction ? &txt_b : &txt_a;
+			cmp = g_app.m_funcs_ntdll.m_pfn_wcsncmp(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
+		}
+		if(cmp == 0)
+		{
+			txt_a = entry_to_wstr(entry_a, mk_col_id_entry_e_layer);
+			txt_b = entry_to_wstr(entry_b, mk_col_id_entry_e_layer);
+			txt_aa = direction ? &txt_a : &txt_b;
+			txt_bb = direction ? &txt_b : &txt_a;
+			cmp = g_app.m_funcs_ntdll.m_pfn_wcsncmp(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
+		}
+		if(cmp == 0)
+		{
+			txt_a = entry_to_wstr(entry_a, mk_col_id_entry_e_filter);
+			txt_b = entry_to_wstr(entry_b, mk_col_id_entry_e_filter);
+			txt_aa = direction ? &txt_a : &txt_b;
+			txt_bb = direction ? &txt_b : &txt_a;
+			cmp = g_app.m_funcs_ntdll.m_pfn_wcsncmp(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
+		}
 	}
 	else
 	{
-		direction = false;
-		col_id = ((mk_col_id_entry_t)((-sort_col) - 1));
+		cmp = aa - bb;
 	}
-	entry_a = win->m_fw->m_entries[aa];
-	entry_b = win->m_fw->m_entries[bb];
-	txt_a = entry_to_wstr(entry_a, col_id);
-	txt_b = entry_to_wstr(entry_b, col_id);
-	txt_aa = direction ? &txt_a : &txt_b;
-	txt_bb = direction ? &txt_b : &txt_a;
-	cmp = g_app.m_funcs_ntdll.m_pfn_wcsncmp(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
 	return cmp;
 }
 
-static inline void sort_entries(void)
+static inline void actual_sort(mk_wnd_t* const win)
 {
-	mk_wnd_t* win;
+	mk_assert(win);
+	mk_assert(win->m_fw);
+	mk_assert(win->m_sort_ints);
+
+	g_app.m_funcs_ntdll.m_pfn_qsort(win->m_sort_ints, win->m_fw->m_count, sizeof(int), &sort_compare_entries);
+}
+
+static inline void mkfw_wnd_sort_entries(mk_wnd_t* const self, mk_col_id_entry_t const col_id, bool const direction)
+{
 	HWND hdr_win;
 	int n;
 	int i;
 	HDITEMW hdr_item;
 	BOOL b;
-	int sort_col;
-	bool direction;
-	mk_col_id_entry_t col_id;
 
-	win = &g_app.m_fw_wnd;
-	mk_assert(win->m_sort_ints);
-	hdr_win = ((HWND)(g_app.m_funcs_user.m_pfn_SendMessageW(win->m_entries, LVM_GETHEADER, 0, 0))); mk_assert(hdr_win);
+	mk_assert(self);
+	mk_assert(self->m_sort_ints);
+	mk_assert(col_id >= 0);
+	mk_assert(col_id <= mk_col_id_entry_e_dummy_end);
+	mk_assert(direction == false || direction == true);
+
+	hdr_win = ((HWND)(g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_GETHEADER, 0, 0))); mk_assert(hdr_win);
 	n = ((int)(mk_col_id_entry_e_dummy_end));
 	for(i = 0; i != n; ++i)
 	{
 		hdr_item.mask = HDI_FORMAT;
 		b = ((BOOL)(g_app.m_funcs_user.m_pfn_SendMessageW(hdr_win, HDM_GETITEM, i, ((LPARAM)(&hdr_item))))); mk_assert(b);
-		hdr_item.fmt &=~ ((unsigned int)(HDF_SORTDOWN | HDF_SORTUP));
 		hdr_item.mask = HDI_FORMAT;
+		hdr_item.fmt &=~ ((unsigned int)(HDF_SORTDOWN | HDF_SORTUP));
 		b = ((BOOL)(g_app.m_funcs_user.m_pfn_SendMessageW(hdr_win, HDM_SETITEM, i, ((LPARAM)(&hdr_item))))); mk_assert(b);
 	}
-	sort_col = win->m_entries_sort_col;
-	if(sort_col > 0)
-	{
-		direction = true;
-		col_id = ((mk_col_id_entry_t)(sort_col - 1));
-	}
-	else
-	{
-		direction = false;
-		col_id = ((mk_col_id_entry_t)((-sort_col) - 1));
-	}
-	n = ((int)(win->m_fw->m_count));
-	if(sort_col != 0)
+	mk_col_id_entry_sort_collapse(col_id, direction, &self->m_entries_sort_col);
+	n = ((int)(self->m_fw->m_count));
+	if(col_id != mk_col_id_entry_e_dummy_end)
 	{
 		hdr_item.mask = HDI_FORMAT;
 		b = ((BOOL)(g_app.m_funcs_user.m_pfn_SendMessageW(hdr_win, HDM_GETITEM, col_id, ((LPARAM)(&hdr_item))))); mk_assert(b);
+		hdr_item.mask = HDI_FORMAT;
 		hdr_item.fmt &=~ ((unsigned int)(HDF_SORTDOWN | HDF_SORTUP));
 		hdr_item.fmt |= ((unsigned int)(direction ? HDF_SORTUP : HDF_SORTDOWN));
-		hdr_item.mask = HDI_FORMAT;
 		b = ((BOOL)(g_app.m_funcs_user.m_pfn_SendMessageW(hdr_win, HDM_SETITEM, col_id, ((LPARAM)(&hdr_item))))); mk_assert(b);
-		sort_col = win->m_entries_sort_col;
-		win->m_entries_sort_col = mk_col_id_entry_e_filter + 1;
-		g_app.m_funcs_ntdll.m_pfn_qsort(win->m_sort_ints, n, sizeof(int), &sort_compare_entries);
-		win->m_entries_sort_col = sort_col;
-		g_app.m_funcs_ntdll.m_pfn_qsort(win->m_sort_ints, n, sizeof(int), &sort_compare_entries);
 	}
-	else
-	{
-		for(i = 0; i != n; ++i)
-		{
-			win->m_sort_ints[i] = i;
-		}
-	}
+	actual_sort(self);
 	b = g_app.m_funcs_user.m_pfn_InvalidateRect(hdr_win, NULL, TRUE); mk_assert(b);
-	b = g_app.m_funcs_user.m_pfn_InvalidateRect(win->m_entries, NULL, TRUE); mk_assert(b);
+	b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_entries, NULL, TRUE); mk_assert(b);
+}
+
+static inline void mkfw_wnd_sort_entries(mk_wnd_t* const self)
+{
+	mk_col_id_entry_t col_id;
+	bool direction;
+
+	mk_assert(self);
+
+	mk_col_id_entry_sort_expand(self->m_entries_sort_col, &col_id, &direction);
+	mkfw_wnd_sort_entries(self, col_id, direction);
 }
 
 static inline void mkfw_wnd_refresh(mk_wnd_t* self)
@@ -2881,7 +2932,7 @@ static inline void mkfw_wnd_refresh(mk_wnd_t* self)
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
 	b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_entries, NULL, TRUE); mk_assert(b);
 	b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
-	sort_entries();
+	mkfw_wnd_sort_entries(self);
 }
 
 static inline void set_max_col_width(HWND const hwnd, int const col_idx, int* const max_storage)
@@ -3162,6 +3213,8 @@ static inline void mkfw_wnd_proc__notify_entries__itemchanged(mk_wnd_t* const se
 
 static inline void mkfw_wnd_proc__notify_entries__columnclick(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
+	mk_col_id_entry_t col_id;
+	bool direction;
 	LPNMLISTVIEW changed;
 	int col_idx;
 
@@ -3171,19 +3224,22 @@ static inline void mkfw_wnd_proc__notify_entries__columnclick(mk_wnd_t* const se
 	mk_assert(col_idx < mk_col_id_entry_e_dummy_end);
 	if(changed->iItem == -1)
 	{
-		if(self->m_entries_sort_col == col_idx + 1)
+		mk_col_id_entry_sort_expand(self->m_entries_sort_col, &col_id, &direction);
+		if(false){}
+		else if(col_id == ((mk_col_id_entry_t)(col_idx)) && direction)
 		{
-			self->m_entries_sort_col = -(col_idx + 1);
+			direction = false;
 		}
-		else if(self->m_entries_sort_col == -(col_idx + 1))
+		else if(col_id == ((mk_col_id_entry_t)(col_idx)) && !direction)
 		{
-			self->m_entries_sort_col = 0;
+			col_id = mk_col_id_entry_e_dummy_end;
 		}
 		else
 		{
-			self->m_entries_sort_col = col_idx + 1;
+			col_id = ((mk_col_id_entry_t)(col_idx));
+			direction = true;
 		}
-		sort_entries();
+		mkfw_wnd_sort_entries(self, col_id, direction);
 	}
 }
 
