@@ -1505,7 +1505,8 @@ struct mk_wnd_s
 	int m_entry_idx_sorted;
 	int m_entries_sort_col;
 	int* m_sort_ints;
-	int m_condition_idx;
+	int m_condition_row;
+	mk_col_id_condition_t m_condition_col;
 	mk_max_width_cols_entries_t m_max_entries;
 	mk_max_width_cols_conditions_t m_max_conditions;
 };
@@ -2979,7 +2980,8 @@ static inline void mkfw_wnd__proc__create(mk_wnd_t* const self, HWND const hwnd,
 	self->m_entry_idx_sorted = 0;
 	self->m_entries_sort_col = 0;
 	self->m_sort_ints = NULL;
-	self->m_condition_idx = 0;
+	self->m_condition_row = 0;
+	self->m_condition_col = mk_col_id_condition_e_dummy_end;
 	self->m_max_entries.m_filter = 10;
 	self->m_max_entries.m_provider = 10;
 	self->m_max_entries.m_layer = 10;
@@ -3347,6 +3349,72 @@ static inline void mkfw_wnd_proc__notify_entries(mk_wnd_t* const self, HWND cons
 	else if(nm_hdr->code == LVN_KEYDOWN     ){ mkfw_wnd_proc__notify_entries__keydown     (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 }
 
+static inline void mkfw_wnd_proc__notify_conditions__rclick(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	LPNMITEMACTIVATE item;
+	HMENU menu;
+	BOOL b;
+	MENUITEMINFOW mi;
+	LRESULT lr;
+	int row_idx;
+	LVHITTESTINFO info;
+	mk_col_id_condition_t col_id;;
+	POINT pt;
+
+	item = ((LPNMITEMACTIVATE)(lparam));
+	menu = g_app.m_funcs_user.m_pfn_CreatePopupMenu(); mk_assert(menu);
+	if(self->m_menu)
+	{
+		b = g_app.m_funcs_user.m_pfn_DestroyMenu(self->m_menu); mk_assert(b);
+	}
+	self->m_menu = menu;
+
+	mi.cbSize = sizeof(mi);
+	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
+	mi.fType = MFT_STRING;
+	mi.wID = menu_id_e_copy_cell;
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_menu_copy_value).m_buf));
+	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_cell, FALSE, &mi); mk_assert(b);
+
+	mi.cbSize = sizeof(mi);
+	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
+	mi.fType = MFT_STRING;
+	mi.wID = menu_id_e_copy_line;
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_menu_copy_line).m_buf));
+	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_line, FALSE, &mi); mk_assert(b);
+
+	mi.cbSize = sizeof(mi);
+	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
+	mi.fType = MFT_STRING;
+	mi.wID = menu_id_e_copy_table;
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstr_menu_copy_table).m_buf));
+	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_table, FALSE, &mi); mk_assert(b);
+
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETSELECTEDCOUNT, 0, 0);
+	if(lr == 1)
+	{
+		lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETSELECTIONMARK, 0, 0);
+		if(lr >= 0 && lr < self->m_fw->m_entries[self->m_entry_idx_sorted]->numFilterConditions)
+		{
+			row_idx = ((int)(lr));
+			self->m_condition_row = row_idx;
+			info.pt = item->ptAction;
+			lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SUBITEMHITTEST, 0, ((LPARAM)(&info)));
+			if(lr == row_idx)
+			{
+				if(info.iSubItem >= 0 && info.iSubItem < mk_col_id_condition_e_dummy_end)
+				{
+					col_id = ((mk_col_id_condition_t)(info.iSubItem));
+					self->m_condition_col = col_id;
+					pt = item->ptAction;
+					b = g_app.m_funcs_user.m_pfn_ClientToScreen(self->m_conditions, &pt); mk_assert(b);
+					b = g_app.m_funcs_user.m_pfn_TrackPopupMenu(menu, 0, pt.x, pt.y, 0, self->m_hwnd, NULL); mk_assert(b);
+				}
+			}
+		}
+	}
+}
+
 static inline void mkfw_wnd_proc__notify_conditions__getdispinfow_text(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
 	LPNMLVDISPINFOW disp_info;
@@ -3460,7 +3528,7 @@ static inline void mkfw_wnd_proc__notify_conditions___keydown_apps(mk_wnd_t* con
 		rect.left = LVIR_LABEL;
 		lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETSELECTIONMARK, 0, 0); selected_idx = ((int)(lr));
 		lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETITEMRECT, selected_idx, ((LPARAM)(&rect))); mk_assert(lr != 0);
-		self->m_condition_idx = selected_idx;
+		self->m_condition_row = selected_idx;
 
 		pt.x = rect.left + ((rect.right - rect.left) / 2);
 		pt.y = rect.top + ((rect.bottom - rect.top) / 2);
@@ -3493,6 +3561,7 @@ static inline void mkfw_wnd_proc__notify_conditions(mk_wnd_t* const self, HWND c
 
 	nm_hdr = ((LPNMHDR)(lparam)); mk_assert(nm_hdr);
 	if(false){}
+	else if(nm_hdr->code == NM_RCLICK       ){ mkfw_wnd_proc__notify_conditions__rclick      (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 	else if(nm_hdr->code == LVN_GETDISPINFOW){ mkfw_wnd_proc__notify_conditions__getdispinfow(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 	else if(nm_hdr->code == LVN_ITEMCHANGED ){ mkfw_wnd_proc__notify_conditions__itemchanged (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
 	else if(nm_hdr->code == LVN_KEYDOWN     ){ mkfw_wnd_proc__notify_conditions__keydown     (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); }
@@ -3511,6 +3580,36 @@ static inline void mkfw_wnd__proc_notify(mk_wnd_t* const self, HWND const hwnd, 
 
 static inline void mkfw_wnd__proc__command__menu_copy_cell(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
+	int entry_idx;
+	FWPM_FILTER0* entry;
+	int condition_idx;
+	FWPM_FILTER_CONDITION0* condition;
+	mk_col_id_condition_t col_id;
+	mk_view_wstr_t wstr;
+
+	SIZE_T bytes_count;
+	HGLOBAL gl;
+	LPVOID ptr;
+	BOOL b;
+	HANDLE h;
+
+	entry_idx = self->m_entry_idx_sorted;
+	entry = self->m_fw->m_entries[entry_idx];
+	condition_idx = self->m_condition_row;
+	condition = &entry->filterCondition[condition_idx];
+	col_id = self->m_condition_col;
+	wstr = condition_entry_to_wstr_any(condition, col_id);
+
+	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
+	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
+	ptr = g_app.m_funcs_kernel.m_pfn_GlobalLock(gl); mk_assert(ptr);
+	std::memcpy(ptr, wstr.m_buf, bytes_count);
+	b = g_app.m_funcs_kernel.m_pfn_GlobalUnlock(gl); mk_assert(b == 0 && GetLastError() == NO_ERROR);
+
+	b = g_app.m_funcs_user.m_pfn_OpenClipboard(self->m_conditions); mk_assert(b);
+	b = g_app.m_funcs_user.m_pfn_EmptyClipboard(); mk_assert(b);
+	h = g_app.m_funcs_user.m_pfn_SetClipboardData(CF_UNICODETEXT, gl); mk_assert(h);
+	b = g_app.m_funcs_user.m_pfn_CloseClipboard(); mk_assert(b);
 }
 
 static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
@@ -3529,7 +3628,7 @@ static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self,
 
 	entry_idx = self->m_entry_idx_sorted;
 	entry = self->m_fw->m_entries[entry_idx];
-	condition_idx = self->m_condition_idx;
+	condition_idx = self->m_condition_row;
 	condition = &entry->filterCondition[condition_idx];
 	wstr = condition_entry_to_wstr_line(condition);
 
