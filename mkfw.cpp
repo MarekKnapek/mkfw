@@ -27,9 +27,14 @@
 
 #if defined DEBUG || defined _DEBUG
 void mk_crash(void){ int volatile* volatile ptr; ptr = NULL; *ptr = 0; }
-#define mk_assert(x) (((x)) ? ((void)(0)) : ((void)(__debugbreak(), mk_crash())))
+void mk_msg(char const* const msg){ MessageBoxA(NULL, msg, "Assert!", MB_ICONERROR); }
+#define stringify2(x) #x
+#define stringify(x) stringify2(x)
+#define mk_assert(x) (((x)) ? ((void)(0)) : ((void)(mk_msg("Assert in file `" __FILE__ "' line `" stringify(__LINE__) "' expression `" #x "'!"), __debugbreak(), mk_crash())))
+#define my_MessageBoxA(parent, msg, title, icon) MessageBoxA(parent, msg, title, icon)
 #else
 #define mk_assert(x)
+#define my_MessageBoxA(parent, msg, title, icon)
 #endif
 
 // fnv1a begin
@@ -192,33 +197,7 @@ static inline HMODULE find_module(PPEB const& peb, DWORD const& k_hash)
 
 static inline LPVOID va_to_real(HMODULE const& mod, PIMAGE_SECTION_HEADER const& sections, WORD const& count, DWORD const& va, DWORD const& sz)
 {
-	#if mk_arch_is_i386
 	return ((LPVOID)(((LPBYTE)(mod)) + va));
-	#elif mk_arch_is_amd64
-	LPVOID real;
-	LPBYTE base;
-	WORD n;
-	WORD i;
-	DWORD sec_va;
-	DWORD sec_sz;
-	DWORD raw;
-
-	real = NULL;
-	base = ((LPBYTE)(mod));
-	n = count;
-	for(i = 0; i != n; ++i)
-	{
-		sec_va = sections[i].VirtualAddress;
-		sec_sz = sections[i].SizeOfRawData;
-		if(va >= sec_va && va + sz <= sec_va + sec_sz)
-		{
-			raw = sections[i].PointerToRawData + (va - sec_va);
-			real = base + raw;
-			break;
-		}
-	}
-	return real;
-	#endif
 }
 
 [[nodiscard]] static inline int mk_str_len(LPCSTR const str)
@@ -292,13 +271,13 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 	exp_dir_sz = arr_dirs[IMAGE_DIRECTORY_ENTRY_EXPORT].Size;
 	arr_sections = ((PIMAGE_SECTION_HEADER)(((LPBYTE)(arr_dirs)) + n_dirs * sizeof(IMAGE_DATA_DIRECTORY)));
 	n_sections = nt->FileHeader.NumberOfSections;
-	exp_dir_real = ((PIMAGE_EXPORT_DIRECTORY)(va_to_real(mod, arr_sections, n_sections, exp_dir_va, exp_dir_sz)));
+	exp_dir_real = ((PIMAGE_EXPORT_DIRECTORY)(va_to_real(mod, arr_sections, n_sections, exp_dir_va, exp_dir_sz))); mk_assert(exp_dir_real);
 	n_names = exp_dir_real->NumberOfNames;
-	arr_names = ((LPDWORD)(va_to_real(mod, arr_sections, n_sections, exp_dir_real->AddressOfNames, n_names * sizeof(DWORD))));
+	arr_names = ((LPDWORD)(va_to_real(mod, arr_sections, n_sections, exp_dir_real->AddressOfNames, n_names * sizeof(DWORD)))); mk_assert(arr_names);
 	for(i_names = 0; i_names != n_names; ++i_names)
 	{
 		name_va = arr_names[i_names];
-		name_real = ((LPCCH)(va_to_real(mod, arr_sections, n_sections, name_va, 1)));
+		name_real = ((LPCCH)(va_to_real(mod, arr_sections, n_sections, name_va, 1))); mk_assert(name_real);
 		sum = fnv1a(name_real);
 		if(sum == k_hash)
 		{
@@ -1602,6 +1581,7 @@ typedef struct mk_app_s mk_app_t;
 
 
 static constexpr mk_konst_t const k_konst = make_konst();;
+static constexpr bool const k_debug = false;
 static mk_app_t g_app;
 
 
@@ -1778,14 +1758,14 @@ static inline void mkfw_load_all(PPEB const peb)
 	g_app.m_dlls.m_ntdll = find_module(peb, k_konst.m_hash_ntdll); mk_assert(g_app.m_dlls.m_ntdll);
 	g_app.m_dlls.m_kernel32 = find_module(peb, k_konst.m_hash_kernel32dll); mk_assert(g_app.m_dlls.m_kernel32);
 
-	#define x(name) g_app.m_funcs_ntdll.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_ntdll, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_ntdll.m_pfn_##name);
+	#define x(name) g_app.m_funcs_ntdll.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_ntdll, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_ntdll.m_pfn_##name); if(k_debug){ if(!g_app.m_funcs_ntdll.m_pfn_##name){ my_MessageBoxA(0, "Could not find `" #name "'.", 0, 0); } }
 	mk_x_ntdll_funcs()
 	#undef x
-	#define x(namea, nameb) g_app.m_funcs_ntdll.m_pfn_##namea = ((tfn_##namea)(find_proc(peb, g_app.m_dlls.m_ntdll, k_konst.m_hash_##namea))); mk_assert(g_app.m_funcs_ntdll.m_pfn_##namea);
+	#define x(namea, nameb) g_app.m_funcs_ntdll.m_pfn_##namea = ((tfn_##namea)(find_proc(peb, g_app.m_dlls.m_ntdll, k_konst.m_hash_##namea))); mk_assert(g_app.m_funcs_ntdll.m_pfn_##namea); if(k_debug){ if(!g_app.m_funcs_ntdll.m_pfn_##namea){ my_MessageBoxA(0, "Could not find `" ## #namea ## "'.", 0, 0); } }
 	mk_x_ntdll2_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_kernel.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_kernel32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_kernel.m_pfn_##name);
+	#define x(name) g_app.m_funcs_kernel.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_kernel32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_kernel.m_pfn_##name); if(k_debug){ if(!g_app.m_funcs_kernel.m_pfn_##name){ my_MessageBoxA(0, "Could not find `" #name "'.", 0, 0); } }
 	mk_x_kernel_funcs()
 	#undef x
 
@@ -1793,23 +1773,23 @@ static inline void mkfw_load_all(PPEB const peb)
 	mk_x_dlls_to_load()
 	#undef x
 
-	#define x(name) g_app.m_funcs_advapi.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_advapi32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_advapi.m_pfn_##name);
+	#define x(name) g_app.m_funcs_advapi.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_advapi32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_advapi.m_pfn_##name); if(k_debug){ if(!g_app.m_funcs_advapi.m_pfn_##name){ my_MessageBoxA(0, "Could not find `" #name "'.", 0, 0); } }
 	mk_x_advapi_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_combase.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_combase, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_combase.m_pfn_##name);
+	#define x(name) g_app.m_funcs_combase.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_combase, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_combase.m_pfn_##name); if(k_debug){ if(!g_app.m_funcs_combase.m_pfn_##name){ my_MessageBoxA(0, "Could not find `" #name "'.", 0, 0); } }
 	mk_x_combase_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_fw.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_fwpuclnt, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_fw.m_pfn_##name);
+	#define x(name) g_app.m_funcs_fw.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_fwpuclnt, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_fw.m_pfn_##name); if(k_debug){ if(!g_app.m_funcs_fw.m_pfn_##name){ my_MessageBoxA(0, "Could not find `" #name "'.", 0, 0); } }
 	mk_x_fw_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_user.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_user32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_user.m_pfn_##name);
+	#define x(name) g_app.m_funcs_user.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_user32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_user.m_pfn_##name); if(k_debug){ if(!g_app.m_funcs_user.m_pfn_##name){ my_MessageBoxA(0, "Could not find `" #name "'.", 0, 0); } }
 	mk_x_user_funcs()
 	#undef x
 
-	#define x(name) g_app.m_funcs_comctl.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_comctl32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_comctl.m_pfn_##name);
+	#define x(name) g_app.m_funcs_comctl.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_comctl32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_comctl.m_pfn_##name); if(k_debug){ if(!g_app.m_funcs_comctl.m_pfn_##name){ my_MessageBoxA(0, "Could not find `" #name "'.", 0, 0); } }
 	mk_x_comctl_funcs()
 	#undef x
 
