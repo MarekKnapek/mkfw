@@ -3458,6 +3458,16 @@ static inline void mkfw_wnd_delete_selected_entry(mk_wnd_t* const self, LPDWORD 
 	return wstr;
 }
 
+static inline void mkfw_wnd_proc__notify_entries___keydown_tab(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	HWND prev;
+
+	mk_assert(self);
+
+	self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_conditions;
+	prev = g_app.m_funcs_user.m_pfn_SetFocus(self->m_conditions); ((void)(prev));
+}
+
 static inline void mkfw_wnd_proc__notify_entries___keydown_del(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
 	mk_view_wstr_t question_text;
@@ -3500,8 +3510,9 @@ static inline void mkfw_wnd_proc__notify_entries__keydown(mk_wnd_t* const self, 
 	mk_assert(keydown);
 	switch(keydown->wVKey)
 	{
+		case VK_TAB   : mkfw_wnd_proc__notify_entries___keydown_tab(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 		case VK_DELETE: mkfw_wnd_proc__notify_entries___keydown_del(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
-		case VK_F5    : mkfw_wnd_proc__notify_entries___keydown_f5(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case VK_F5    : mkfw_wnd_proc__notify_entries___keydown_f5 (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 	}
 }
 
@@ -3664,6 +3675,16 @@ static inline void mkfw_wnd_proc__notify_conditions__itemchanged(mk_wnd_t* const
 	self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_conditions;
 }
 
+static inline void mkfw_wnd_proc__notify_conditions___keydown_tab(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	HWND prev;
+
+	mk_assert(self);
+
+	self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_entries;
+	prev = g_app.m_funcs_user.m_pfn_SetFocus(self->m_entries); ((void)(prev));
+}
+
 static inline void mkfw_wnd_proc__notify_conditions___keydown_apps(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
 	HMENU menu;
@@ -3723,6 +3744,7 @@ static inline void mkfw_wnd_proc__notify_conditions__keydown(mk_wnd_t* const sel
 	mk_assert(keydown);
 	switch(keydown->wVKey)
 	{
+		case VK_TAB : mkfw_wnd_proc__notify_conditions___keydown_tab (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 		case VK_APPS: mkfw_wnd_proc__notify_conditions___keydown_apps(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 		case VK_F5  : mkfw_wnd_proc__notify_conditions___keydown_f5  (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 	}
