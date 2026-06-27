@@ -2316,10 +2316,11 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_filed(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_filed(FWPM_FILTER0 const* const filter, FWPM_FILTER_CONDITION0 const* const condition)
 {
 	mk_view_wstr_t wstr;
 
+	mk_assert(filter);
 	mk_assert(condition);
 
 	wstr = guid_to_text(&condition->fieldKey);
@@ -2328,10 +2329,11 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_match_type(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_match_type(FWPM_FILTER0 const* const filter, FWPM_FILTER_CONDITION0 const* const condition)
 {
 	mk_view_wstr_t wstr;
 
+	mk_assert(filter);
 	mk_assert(condition);
 
 	wstr = match_type_to_text(condition->matchType);
@@ -2340,10 +2342,11 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_value_type(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_value_type(FWPM_FILTER0 const* const filter, FWPM_FILTER_CONDITION0 const* const condition)
 {
 	mk_view_wstr_t wstr;
 
+	mk_assert(filter);
 	mk_assert(condition);
 
 	wstr = type_to_text(condition->conditionValue.type);
@@ -2352,10 +2355,11 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_value_data(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_value_data(FWPM_FILTER0 const* const filter, FWPM_FILTER_CONDITION0 const* const condition)
 {
 	mk_view_wstr_t wstr;
 
+	mk_assert(filter);
 	mk_assert(condition);
 
 	wstr = condition_value_to_text(&condition->conditionValue);
@@ -2610,10 +2614,11 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	return nstr;
 }
 
-[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_note(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_note(FWPM_FILTER0 const* const filter, FWPM_FILTER_CONDITION0 const* const condition)
 {
 	mk_view_wstr_t wstr;
 
+	mk_assert(filter);
 	mk_assert(condition);
 
 	wstr = nstr_to_wstr(k_konst.m_nstr_empty);
@@ -2635,48 +2640,49 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_UINT32)){ wstr = nstr_to_wstr(ip_address_v4_to_nstr(condition->conditionValue.uint32)); }
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_RANGE_TYPE) && (condition->conditionValue.rangeValue->valueLow.type == FWP_BYTE_ARRAY16_TYPE) && (condition->conditionValue.rangeValue->valueHigh.type == FWP_BYTE_ARRAY16_TYPE)){ wstr = nstr_to_wstr(ip_address_v6_range_to_nstr(&condition->conditionValue)); }
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_RANGE_TYPE) && (condition->conditionValue.rangeValue->valueLow.type == FWP_UINT32) && (condition->conditionValue.rangeValue->valueHigh.type == FWP_UINT32)){ wstr = nstr_to_wstr(ip_address_v4_range_to_nstr(&condition->conditionValue)); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 2)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_packet_too_big); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 2)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_packet_too_big); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 3)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_destination_unreachable); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 3)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_destination_unreachable); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 4)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_source_quench); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 4)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_source_quench); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 5)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_redirect); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 5)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_redirect); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 8)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_echo_request); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 8)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_echo_request); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 9)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_router_advertisement); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 9)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_router_advertisement); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 10)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_router_solicitation); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 10)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_router_solicitation); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 11)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_time_exceeded); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 11)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_time_exceeded); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 12)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_parameter_problem); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 12)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_parameter_problem); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 13)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_timestamp_request); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 13)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_timestamp_request); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 17)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_address_mask_request); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 17)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_address_mask_request); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  2)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_packet_too_big         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  2)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_packet_too_big         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  3)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_destination_unreachable); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  3)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_destination_unreachable); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  4)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_source_quench          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  4)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_source_quench          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  5)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_redirect               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  5)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_redirect               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  8)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_echo_request           ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  8)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_echo_request           ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  9)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_router_advertisement   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 ==  9)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_router_advertisement   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 10)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_router_solicitation    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 10)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_router_solicitation    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 11)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_time_exceeded          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 11)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_time_exceeded          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 12)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_parameter_problem      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 12)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_parameter_problem      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 13)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_timestamp_request      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 13)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_timestamp_request      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 17)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_address_mask_request   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == 17)){ wstr = nstr_to_wstr(k_konst.m_nstr_icmp_address_mask_request   ); }
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_any(FWPM_FILTER_CONDITION0 const* const condition, mk_col_id_condition_t const col_id)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_any(FWPM_FILTER0 const* const filter, FWPM_FILTER_CONDITION0 const* const condition, mk_col_id_condition_t const col_id)
 {
 	mk_view_wstr_t wstr;
 
+	mk_assert(filter);
 	mk_assert(condition);
 	mk_assert(col_id >= 0);
 	mk_assert(col_id < mk_col_id_condition_e_dummy_end);
 
 	switch(col_id)
 	{
-		case mk_col_id_condition_e_field     : wstr = condition_entry_to_wstr_filed     (condition); break;
-		case mk_col_id_condition_e_match_type: wstr = condition_entry_to_wstr_match_type(condition); break;
-		case mk_col_id_condition_e_value_type: wstr = condition_entry_to_wstr_value_type(condition); break;
-		case mk_col_id_condition_e_value_data: wstr = condition_entry_to_wstr_value_data(condition); break;
-		case mk_col_id_condition_e_note      : wstr = condition_entry_to_wstr_note      (condition); break;
+		case mk_col_id_condition_e_field     : wstr = condition_entry_to_wstr_filed     (filter, condition); break;
+		case mk_col_id_condition_e_match_type: wstr = condition_entry_to_wstr_match_type(filter, condition); break;
+		case mk_col_id_condition_e_value_type: wstr = condition_entry_to_wstr_value_type(filter, condition); break;
+		case mk_col_id_condition_e_value_data: wstr = condition_entry_to_wstr_value_data(filter, condition); break;
+		case mk_col_id_condition_e_note      : wstr = condition_entry_to_wstr_note      (filter, condition); break;
 		case mk_col_id_entry_e_dummy_end: mk_assert(false); break;
 		default: mk_assert(false); break;
 	}
@@ -2685,7 +2691,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_line(FWPM_FILTER_CONDITION0 const* const condition)
+[[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_line(FWPM_FILTER0 const* const filter, FWPM_FILTER_CONDITION0 const* const condition)
 {
 	int cap;
 	LPWSTR buf;
@@ -2696,6 +2702,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	mk_view_wstr_t wstr;
 	LPWSTR ptr;
 
+	mk_assert(filter);
 	mk_assert(condition);
 
 	cap = 4 * 1024;
@@ -2705,7 +2712,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	for(i = 0; i != n; ++i)
 	{
 		col_id = ((mk_col_id_condition_e)(i));
-		wstr = condition_entry_to_wstr_any(condition, col_id);
+		wstr = condition_entry_to_wstr_any(filter, condition, col_id);
 		if(len + wstr.m_len + 32 > cap)
 		{
 			while(len + wstr.m_len + 32 > cap){ cap *= 2; }
@@ -2744,7 +2751,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	n = entry->numFilterConditions;
 	for(i = 0; i != n; ++i)
 	{
-		wstr = condition_entry_to_wstr_line(&entry->filterCondition[i]);
+		wstr = condition_entry_to_wstr_line(entry, &entry->filterCondition[i]);
 		if(len + wstr.m_len + 32 > cap)
 		{
 			while(len + wstr.m_len + 32 > cap){ cap *= 2; }
@@ -3456,7 +3463,7 @@ static inline void mkfw_wnd_proc__notify_conditions__getdispinfow_text(mk_wnd_t*
 	mk_assert(col_idx >= 0);
 	mk_assert(col_idx < mk_col_id_condition_e_dummy_end);
 	col_id = ((mk_col_id_condition_t)(col_idx));
-	wstr = condition_entry_to_wstr_any(condition, col_id);
+	wstr = condition_entry_to_wstr_any(entry, condition, col_id);
 	disp_info->item.pszText = ((LPWSTR)(wstr.m_buf));
 	mk_assert(disp_info->item.pszText);
 }
@@ -3611,7 +3618,7 @@ static inline void mkfw_wnd__proc__command__menu_copy_cell(mk_wnd_t* const self,
 	condition_idx = self->m_condition_row;
 	condition = &entry->filterCondition[condition_idx];
 	col_id = self->m_condition_col;
-	wstr = condition_entry_to_wstr_any(condition, col_id);
+	wstr = condition_entry_to_wstr_any(entry, condition, col_id);
 
 	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
 	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
@@ -3643,7 +3650,7 @@ static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self,
 	entry = self->m_fw->m_entries[entry_idx];
 	condition_idx = self->m_condition_row;
 	condition = &entry->filterCondition[condition_idx];
-	wstr = condition_entry_to_wstr_line(condition);
+	wstr = condition_entry_to_wstr_line(entry, condition);
 
 	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
 	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
