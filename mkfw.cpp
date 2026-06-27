@@ -305,6 +305,7 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 
 #define mk_min(a, b)((b)<(a)?(b):(a))
 #define mk_max(a, b)((b)<(a)?(a):(b))
+#define mk_clamp(x, lo, hi)mk_min(mk_max((lo),(x)),(hi))
 
 template<typename t, size_t n>
 struct mk_view_t
@@ -3491,10 +3492,13 @@ static inline void mkfw_wnd_proc__notify_conditions__getdispinfow_text(mk_wnd_t*
 	disp_info = ((LPNMLVDISPINFOW)(lparam));
 	mk_assert(disp_info);
 	item_idx = self->m_entry_idx_sorted;
+	item_idx = mk_clamp(item_idx, 0, ((int)(self->m_fw->m_count)) - 1);
 	mk_assert(item_idx >= 0);
 	mk_assert(item_idx < ((int)(self->m_fw->m_count)));
+	self->m_entry_idx_sorted = item_idx;
 	entry = self->m_fw->m_entries[self->m_entry_idx_sorted];
 	item_idx = disp_info->item.iItem;
+	item_idx = mk_clamp(item_idx, 0, ((int)(entry->numFilterConditions)) - 1);
 	mk_assert(item_idx >= 0);
 	mk_assert(item_idx < ((int)(entry->numFilterConditions)));
 	mk_assert(entry->filterCondition);
