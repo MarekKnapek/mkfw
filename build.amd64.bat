@@ -58,7 +58,7 @@ memcpy_amd64.obj ^
 /SUBSYSTEM:WINDOWS ^
 /STACK:1048576,1048576
 if %errorlevel% neq 0 goto :mk_bad
-copy mkfw.exe mkfw.amd64.exe || goto :mk_bad
+move /y mkfw.exe mkfw.amd64.exe || goto :mk_bad
 goto :mk_gud
 
 :mk_fail
