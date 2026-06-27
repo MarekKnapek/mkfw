@@ -3180,7 +3180,7 @@ static inline void mkfw_wnd__proc__create(mk_wnd_t* const self, HWND const hwnd,
 	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.filter).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_filter, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_filter);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.name).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.name).m_buf)); col.cx = 300;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_name, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_name);
 
 	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.description).m_buf)); col.cx = 180;
@@ -3234,6 +3234,9 @@ static inline void mkfw_wnd__proc__create(mk_wnd_t* const self, HWND const hwnd,
 
 	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.note).m_buf)); col.cx = 200;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_note, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_note);
+
+	mk_col_id_entry_sort_collapse(mk_col_id_entry_e_name, true, &self->m_entries_sort_col);
+	mkfw_wnd_sort_entries(self);
 }
 
 static inline void mkfw_wnd__proc_create(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
