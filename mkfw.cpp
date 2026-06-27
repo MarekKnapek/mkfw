@@ -2863,15 +2863,15 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	{
 		col_id = ((mk_col_id_condition_e)(i));
 		wstr = condition_entry_to_wstr_any(filter, condition, col_id);
-		if(len + wstr.m_len + 32 > cap)
+		if(len + ((int)(wstr.m_len)) + 32 > cap)
 		{
-			while(len + wstr.m_len + 32 > cap){ cap *= 2; }
+			while(len + ((int)(wstr.m_len)) + 32 > cap){ cap *= 2; }
 			buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapReAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, buf, cap))); mk_assert(buf);
 		}
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
-		len += ((int)(wstr.m_len));
+		len += ((int)(((int)(wstr.m_len))));
 		wstr = nstr_to_wstr(k_konst.m_nstrs.tab);
-		mk_assert(len + wstr.m_len < cap);
+		mk_assert(len + ((int)(wstr.m_len)) < cap);
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
 	}
@@ -2902,15 +2902,15 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	for(i = 0; i != n; ++i)
 	{
 		wstr = condition_entry_to_wstr_line(entry, &entry->filterCondition[i]);
-		if(len + wstr.m_len + 32 > cap)
+		if(len + ((int)(wstr.m_len)) + 32 > cap)
 		{
-			while(len + wstr.m_len + 32 > cap){ cap *= 2; }
+			while(len + ((int)(wstr.m_len)) + 32 > cap){ cap *= 2; }
 			buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapReAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, buf, cap))); mk_assert(buf);
 		}
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
 		wstr = nstr_to_wstr(k_konst.m_nstrs.nl);
-		mk_assert(len + wstr.m_len < cap);
+		mk_assert(len + ((int)(wstr.m_len)) < cap);
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
 	}
@@ -3578,7 +3578,7 @@ static inline void mkfw_wnd_proc__notify_conditions__rclick(mk_wnd_t* const self
 	if(lr == 1)
 	{
 		lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETSELECTIONMARK, 0, 0);
-		if(lr >= 0 && lr < self->m_fw->m_entries[self->m_entry_idx_sorted]->numFilterConditions)
+		if(lr >= 0 && lr < ((int)(self->m_fw->m_entries[self->m_entry_idx_sorted]->numFilterConditions)))
 		{
 			row_idx = ((int)(lr));
 			self->m_condition_row = row_idx;
