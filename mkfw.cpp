@@ -1541,6 +1541,7 @@ struct mk_wnd_s
 	HWND m_entries;
 	HWND m_conditions;
 	HMENU m_menu;
+	HWND m_list_view_for_menu;
 	mk_fw_t* m_fw;
 	mk_wnd_sub_window_id_t m_last_sub_window_focus;
 	int m_entry_idx_sorted;
@@ -1806,7 +1807,7 @@ template<typename t, size_t n>
 	len = g_app.m_funcs_combase.m_pfn_StringFromGUID2(*guid, buf, cap); mk_assert(len >= 1); mk_assert(len < cap);
 	buf[len] = L'\0';
 	wstr.m_buf = buf;
-	wstr.m_len = len;
+	wstr.m_len = len - 1;
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
 	return wstr;
@@ -2367,6 +2368,47 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	return wstr;
 }
 
+[[nodiscard]] static inline mk_view_wstr_t entry_to_wstr_line(FWPM_FILTER0 const* const filter)
+{
+	int cap;
+	LPWSTR buf;
+	int len;
+	int n;
+	int i;
+	mk_col_id_entry_t col_id;
+	mk_view_wstr_t wstr;
+	LPWSTR ptr;
+
+	mk_assert(filter);
+
+	cap = 4 * 1024;
+	buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, cap))); mk_assert(buf);
+	len = 0;
+	n = mk_col_id_entry_e_dummy_end;
+	for(i = 0; i != n; ++i)
+	{
+		col_id = ((mk_col_id_entry_t)(i));
+		wstr = entry_to_wstr(filter, col_id);
+		if(len + ((int)(wstr.m_len)) + 32 > cap)
+		{
+			while(len + ((int)(wstr.m_len)) + 32 > cap){ cap *= 2; }
+			buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapReAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, buf, cap))); mk_assert(buf);
+		}
+		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
+		len += ((int)(((int)(wstr.m_len))));
+		wstr = nstr_to_wstr(k_konst.m_nstrs.tab);
+		mk_assert(len + ((int)(wstr.m_len)) < cap);
+		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
+		len += ((int)(wstr.m_len));
+	}
+	buf[len] = L'\0';
+	wstr.m_buf = buf;
+	wstr.m_len = len;
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
 [[nodiscard]] static inline mk_view_wstr_t condition_entry_to_wstr_filed(FWPM_FILTER0 const* const filter, FWPM_FILTER_CONDITION0 const* const condition)
 {
 	mk_view_wstr_t wstr;
@@ -2848,7 +2890,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	int len;
 	int n;
 	int i;
-	mk_col_id_condition_e col_id;
+	mk_col_id_condition_t col_id;
 	mk_view_wstr_t wstr;
 	LPWSTR ptr;
 
@@ -2861,7 +2903,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	n = mk_col_id_condition_e_dummy_end;
 	for(i = 0; i != n; ++i)
 	{
-		col_id = ((mk_col_id_condition_e)(i));
+		col_id = ((mk_col_id_condition_t)(i));
 		wstr = condition_entry_to_wstr_any(filter, condition, col_id);
 		if(len + ((int)(wstr.m_len)) + 32 > cap)
 		{
@@ -2892,11 +2934,12 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	UINT32 i;
 	mk_view_wstr_t wstr;
 	LPWSTR ptr;
+	BOOL b;
 
 	mk_assert(entry);
 
 	cap = 4 * 1024;
-	buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, cap))); mk_assert(buf);
+	buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, cap * sizeof(WCHAR)))); mk_assert(buf);
 	len = 0;
 	n = entry->numFilterConditions;
 	for(i = 0; i != n; ++i)
@@ -2905,10 +2948,52 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		if(len + ((int)(wstr.m_len)) + 32 > cap)
 		{
 			while(len + ((int)(wstr.m_len)) + 32 > cap){ cap *= 2; }
-			buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapReAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, buf, cap))); mk_assert(buf);
+			buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapReAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, buf, cap * sizeof(WCHAR)))); mk_assert(buf);
 		}
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
+		b = g_app.m_funcs_kernel.m_pfn_HeapFree(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, ((LPVOID)(wstr.m_buf))); mk_assert(b);
+		wstr = nstr_to_wstr(k_konst.m_nstrs.nl);
+		mk_assert(len + ((int)(wstr.m_len)) < cap);
+		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
+		len += ((int)(wstr.m_len));
+	}
+	buf[len] = L'\0';
+	wstr.m_buf = buf;
+	wstr.m_len = len;
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline mk_view_wstr_t filter_to_wstr_table(mk_wnd_t const* const self)
+{
+	int cap;
+	LPWSTR buf;
+	int len;
+	UINT32 n;
+	UINT32 i;
+	mk_view_wstr_t wstr;
+	LPWSTR ptr;
+	BOOL b;
+
+	mk_assert(self);
+
+	cap = 4 * 1024;
+	buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, cap * sizeof(WCHAR)))); mk_assert(buf);
+	len = 0;
+	n = ((int)(self->m_fw->m_count));
+	for(i = 0; i != n; ++i)
+	{
+		wstr = entry_to_wstr_line(self->m_fw->m_entries[self->m_sort_ints[i]]);
+		if(len + ((int)(wstr.m_len)) + 32 > cap)
+		{
+			while(len + ((int)(wstr.m_len)) + 32 > cap){ cap *= 2; }
+			buf = ((LPWSTR)(g_app.m_funcs_kernel.m_pfn_HeapReAlloc(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, buf, cap * sizeof(WCHAR)))); mk_assert(buf);
+		}
+		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
+		len += ((int)(wstr.m_len));
+		b = g_app.m_funcs_kernel.m_pfn_HeapFree(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, ((LPVOID)(wstr.m_buf))); mk_assert(b);
 		wstr = nstr_to_wstr(k_konst.m_nstrs.nl);
 		mk_assert(len + ((int)(wstr.m_len)) < cap);
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
@@ -3080,6 +3165,55 @@ static inline void mkfw_wnd_sort_entries(mk_wnd_t* const self)
 	mkfw_wnd_sort_entries(self, col_id, direction);
 }
 
+static inline void mkfw_wnd_on_key_apps(mk_wnd_t* const self, HWND const list_view)
+{
+	BOOL b;
+	HMENU menu;
+	MENUITEMINFOW mi;
+	LRESULT lr;
+	RECT rect;
+	int selected_idx;
+	POINT pt;
+
+	mk_assert(self);
+	mk_assert(list_view);
+
+	self->m_list_view_for_menu = list_view;
+	if(self->m_menu)
+	{
+		b = g_app.m_funcs_user.m_pfn_DestroyMenu(self->m_menu); mk_assert(b);
+	}
+	menu = g_app.m_funcs_user.m_pfn_CreatePopupMenu(); mk_assert(menu);
+	self->m_menu = menu;
+
+	mi.cbSize = sizeof(mi);
+	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
+	mi.fType = MFT_STRING;
+	mi.wID = menu_id_e_copy_line;
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.menu_copy_line).m_buf));
+	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_line, FALSE, &mi); mk_assert(b);
+
+	mi.cbSize = sizeof(mi);
+	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
+	mi.fType = MFT_STRING;
+	mi.wID = menu_id_e_copy_table;
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.menu_copy_table).m_buf));
+	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_table, FALSE, &mi); mk_assert(b);
+
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(list_view, LVM_GETSELECTEDCOUNT, 0, 0);
+	if(lr == 1)
+	{
+		rect.left = LVIR_LABEL;
+		lr = g_app.m_funcs_user.m_pfn_SendMessageW(list_view, LVM_GETSELECTIONMARK, 0, 0); selected_idx = ((int)(lr));
+		lr = g_app.m_funcs_user.m_pfn_SendMessageW(list_view, LVM_GETITEMRECT, selected_idx, ((LPARAM)(&rect))); mk_assert(lr != 0);
+
+		pt.x = rect.left + ((rect.right - rect.left) / 2);
+		pt.y = rect.top + ((rect.bottom - rect.top) / 2);
+		b = g_app.m_funcs_user.m_pfn_ClientToScreen(list_view, &pt); mk_assert(b);
+		b = g_app.m_funcs_user.m_pfn_TrackPopupMenu(menu, 0, pt.x, pt.y, 0, self->m_hwnd, NULL); mk_assert(b);
+	}
+}
+
 static inline void mkfw_wnd_refresh(mk_wnd_t* self)
 {
 	DWORD dw;
@@ -3145,6 +3279,7 @@ static inline void mkfw_wnd__proc__create(mk_wnd_t* const self, HWND const hwnd,
 	self->m_entries = NULL;
 	self->m_conditions = NULL;
 	self->m_menu = NULL;
+	self->m_list_view_for_menu = NULL;
 	self->m_fw;
 	self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_entries;
 	self->m_entry_idx_sorted = 0;
@@ -3365,7 +3500,7 @@ static inline void mkfw_wnd_proc__notify_entries__itemchanged(mk_wnd_t* const se
 
 	mk_assert(self);
 	self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_entries;
-	changed = ((LPNMLISTVIEW)(lparam));
+	changed = ((LPNMLISTVIEW)(lparam)); mk_assert(changed);
 	if((changed->iItem != -1) && ((changed->uNewState & LVIS_SELECTED) != 0))
 	{
 		lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, WM_SETREDRAW, FALSE, 0); mk_assert(lr == 0);
@@ -3404,7 +3539,7 @@ static inline void mkfw_wnd_proc__notify_entries__columnclick(mk_wnd_t* const se
 	LPNMLISTVIEW changed;
 	int col_idx;
 
-	changed = ((LPNMLISTVIEW)(lparam));
+	changed = ((LPNMLISTVIEW)(lparam)); mk_assert(changed);
 	col_idx = changed->iSubItem;
 	mk_assert(col_idx >= 0);
 	mk_assert(col_idx < mk_col_id_entry_e_dummy_end);
@@ -3502,6 +3637,11 @@ static inline void mkfw_wnd_proc__notify_entries___keydown_del(mk_wnd_t* const s
 	}
 }
 
+static inline void mkfw_wnd_proc__notify_entries___keydown_apps(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	mkfw_wnd_on_key_apps(self, self->m_entries);
+}
+
 static inline void mkfw_wnd_proc__notify_entries___keydown_f5(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
 	mkfw_wnd_refresh(self);
@@ -3515,9 +3655,10 @@ static inline void mkfw_wnd_proc__notify_entries__keydown(mk_wnd_t* const self, 
 	mk_assert(keydown);
 	switch(keydown->wVKey)
 	{
-		case VK_TAB   : mkfw_wnd_proc__notify_entries___keydown_tab(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
-		case VK_DELETE: mkfw_wnd_proc__notify_entries___keydown_del(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
-		case VK_F5    : mkfw_wnd_proc__notify_entries___keydown_f5 (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case VK_TAB   : mkfw_wnd_proc__notify_entries___keydown_tab (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case VK_DELETE: mkfw_wnd_proc__notify_entries___keydown_del (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case VK_APPS  : mkfw_wnd_proc__notify_entries___keydown_apps(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case VK_F5    : mkfw_wnd_proc__notify_entries___keydown_f5  (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 	}
 }
 
@@ -3677,7 +3818,18 @@ static inline void mkfw_wnd_proc__notify_conditions__getdispinfow(mk_wnd_t* cons
 
 static inline void mkfw_wnd_proc__notify_conditions__itemchanged(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
+	LPNMLISTVIEW changed;
+	int item_idx;
+
+	mk_assert(self);
+
 	self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_conditions;
+	changed = ((LPNMLISTVIEW)(lparam)); mk_assert(changed);
+	if((changed->iItem != -1) && ((changed->uNewState & LVIS_SELECTED) != 0))
+	{
+		item_idx = changed->iItem;
+		self->m_condition_row = item_idx;
+	}
 }
 
 static inline void mkfw_wnd_proc__notify_conditions___keydown_tab(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
@@ -3692,48 +3844,7 @@ static inline void mkfw_wnd_proc__notify_conditions___keydown_tab(mk_wnd_t* cons
 
 static inline void mkfw_wnd_proc__notify_conditions___keydown_apps(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
-	HMENU menu;
-	BOOL b;
-	MENUITEMINFOW mi;
-	LRESULT lr;
-	RECT rect;
-	int selected_idx;
-	POINT pt;
-
-	menu = g_app.m_funcs_user.m_pfn_CreatePopupMenu(); mk_assert(menu);
-	if(self->m_menu)
-	{
-		b = g_app.m_funcs_user.m_pfn_DestroyMenu(self->m_menu); mk_assert(b);
-	}
-	self->m_menu = menu;
-
-	mi.cbSize = sizeof(mi);
-	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
-	mi.fType = MFT_STRING;
-	mi.wID = menu_id_e_copy_line;
-	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.menu_copy_line).m_buf));
-	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_line, FALSE, &mi); mk_assert(b);
-
-	mi.cbSize = sizeof(mi);
-	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
-	mi.fType = MFT_STRING;
-	mi.wID = menu_id_e_copy_table;
-	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.menu_copy_table).m_buf));
-	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_table, FALSE, &mi); mk_assert(b);
-
-	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETSELECTEDCOUNT, 0, 0);
-	if(lr == 1)
-	{
-		rect.left = LVIR_LABEL;
-		lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETSELECTIONMARK, 0, 0); selected_idx = ((int)(lr));
-		lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_GETITEMRECT, selected_idx, ((LPARAM)(&rect))); mk_assert(lr != 0);
-		self->m_condition_row = selected_idx;
-
-		pt.x = rect.left + ((rect.right - rect.left) / 2);
-		pt.y = rect.top + ((rect.bottom - rect.top) / 2);
-		b = g_app.m_funcs_user.m_pfn_ClientToScreen(self->m_conditions, &pt); mk_assert(b);
-		b = g_app.m_funcs_user.m_pfn_TrackPopupMenu(menu, 0, pt.x, pt.y, 0, self->m_hwnd, NULL); mk_assert(b);
-	}
+	mkfw_wnd_on_key_apps(self, self->m_conditions);
 }
 
 static inline void mkfw_wnd_proc__notify_conditions___keydown_f5(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
@@ -3814,6 +3925,7 @@ static inline void mkfw_wnd__proc__command__menu_copy_cell(mk_wnd_t* const self,
 
 static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
+	HWND list_view;
 	int entry_idx;
 	FWPM_FILTER0* entry;
 	int condition_idx;
@@ -3826,11 +3938,19 @@ static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self,
 	BOOL b;
 	HANDLE h;
 
+	mk_assert(self);
+	mk_assert(self->m_list_view_for_menu);
+
+	list_view = self->m_list_view_for_menu;
 	entry_idx = self->m_entry_idx_sorted;
 	entry = self->m_fw->m_entries[entry_idx];
 	condition_idx = self->m_condition_row;
+	condition_idx = mk_clamp(condition_idx, 0, ((int)(entry->numFilterConditions)));
 	condition = &entry->filterCondition[condition_idx];
-	wstr = condition_entry_to_wstr_line(entry, condition);
+	if(false){}
+	else if(list_view == self->m_entries   ){ wstr = entry_to_wstr_line(entry); }
+	else if(list_view == self->m_conditions){ wstr = condition_entry_to_wstr_line(entry, condition); }
+	else{ mk_assert(false); }
 
 	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
 	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
@@ -3848,6 +3968,7 @@ static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self,
 
 static inline void mkfw_wnd__proc__command__menu_copy_table(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
+	HWND list_view;
 	int entry_idx;
 	FWPM_FILTER0* entry;
 	mk_view_wstr_t wstr;
@@ -3858,9 +3979,13 @@ static inline void mkfw_wnd__proc__command__menu_copy_table(mk_wnd_t* const self
 	BOOL b;
 	HANDLE h;
 
+	list_view = self->m_list_view_for_menu;
 	entry_idx = self->m_entry_idx_sorted;
 	entry = self->m_fw->m_entries[entry_idx];
-	wstr = condition_entry_to_wstr_table(entry);
+	if(false){}
+	else if(list_view == self->m_entries   ){ wstr = filter_to_wstr_table(self); }
+	else if(list_view == self->m_conditions){ wstr = condition_entry_to_wstr_table(entry); }
+	else{ mk_assert(false); }
 
 	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
 	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
