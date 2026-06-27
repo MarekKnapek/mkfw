@@ -26,6 +26,7 @@
 #endif
 
 #if defined DEBUG || defined _DEBUG
+#define mk_is_debug 1
 void mk_crash(void){ int volatile* volatile ptr; ptr = NULL; *ptr = 0; }
 void mk_msg(char const* const msg){ MessageBoxA(NULL, msg, "Assert!", MB_ICONERROR); }
 #define stringify2(x) #x
@@ -33,6 +34,7 @@ void mk_msg(char const* const msg){ MessageBoxA(NULL, msg, "Assert!", MB_ICONERR
 #define mk_assert(x) (((x)) ? ((void)(0)) : ((void)(mk_msg("Assert in file `" __FILE__ "' line `" stringify(__LINE__) "' expression `" #x "'!"), __debugbreak(), mk_crash())))
 #define my_MessageBoxA(parent, msg, title, icon) MessageBoxA(parent, msg, title, icon)
 #else
+#define mk_is_debug 0
 #define mk_assert(x)
 #define my_MessageBoxA(parent, msg, title, icon)
 #endif
@@ -1641,7 +1643,7 @@ typedef struct mk_app_s mk_app_t;
 
 
 static constexpr mk_konst_t const k_konst = make_konst();;
-static constexpr bool const k_debug = false;
+static constexpr bool const k_debug = mk_is_debug;
 static mk_app_t g_app;
 
 
