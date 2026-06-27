@@ -524,10 +524,10 @@ int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(fire_wall, "FireWall") \
 	x(fmt_arr16, "[%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x]") \
 	x(fmt_ipv4, "%d.%d.%d.%d") \
-	x(fmt_ipv4_mask_08, "%d/%d (%d.%d.%d.%d - %d.%d.%d.%d)") \
-	x(fmt_ipv4_mask_16, "%d.%d/%d (%d.%d.%d.%d - %d.%d.%d.%d)") \
-	x(fmt_ipv4_mask_24, "%d.%d.%d/%d (%d.%d.%d.%d - %d.%d.%d.%d)") \
-	x(fmt_ipv4_mask_32, "%d.%d.%d.%d/%d (%d.%d.%d.%d - %d.%d.%d.%d)") \
+	x(fmt_ipv4_mask_08, "%d.%d.%d.%d - %d.%d.%d.%d") \
+	x(fmt_ipv4_mask_16, "%d.%d.%d.%d - %d.%d.%d.%d") \
+	x(fmt_ipv4_mask_24, "%d.%d.%d.%d - %d.%d.%d.%d") \
+	x(fmt_ipv4_mask_32, "%d.%d.%d.%d - %d.%d.%d.%d") \
 	x(fmt_ipv6_mask_128, "%x:%x:%x:%x:%x:%x:%x:%x/%d") \
 	x(fmt_ipv6_mask_32, "%x:%x::/%d") \
 	x(fmt_ipv6_mask_48, "%x:%x:%x::/%d") \
@@ -2531,6 +2531,8 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	mk_view_nstr_t fmt;
 	unsigned char parts_a[4];
 	unsigned char parts_b[4];
+	unsigned char parts_c[4];
+	unsigned char parts_d[4];
 	unsigned char mask;
 	int len;
 	mk_view_nstr_t nstr;
@@ -2558,6 +2560,14 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	else if(same_bits == 0)
 	{
 		nstr = nstr_to_nstr(k_konst.m_nstrs.every_ipv4);
+		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+		cap = _countof(g_app.m_tmp_nstrs[0]);
+		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_08);
+		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
+		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_c[0], parts_c[1], parts_c[2], parts_c[3], parts_d[0], parts_d[1], parts_d[2], parts_d[3]); mk_assert(len >= 1); mk_assert(len < cap);
+		nstr.m_buf = buf;
+		nstr.m_len = len;
 	}
 	else if(same_bits > 0 && same_bits <= 8)
 	{
@@ -2565,6 +2575,8 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		cap = _countof(g_app.m_tmp_nstrs[0]);
 		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_08);
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
+		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
+		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
 		parts_b[0] = parts_a[0]; parts_b[1] = parts_a[1]; parts_b[2] = parts_a[2]; parts_b[3] = parts_a[3];
 		mask = (((1u << (same_bits - 0)) - 1) << (CHAR_BIT - (same_bits - 0)));
 		parts_a[0] &= mask;
@@ -2575,7 +2587,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		parts_b[1] = 0xff;
 		parts_b[2] = 0xff;
 		parts_b[3] = 0xff;
-		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_a[0], same_bits, parts_a[0], parts_a[1], parts_a[2], parts_a[3], parts_b[0], parts_b[1], parts_b[2], parts_b[3]); mk_assert(len >= 1); mk_assert(len < cap);
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_c[0], parts_c[1], parts_c[2], parts_c[3], parts_d[0], parts_d[1], parts_d[2], parts_d[3]); mk_assert(len >= 1); mk_assert(len < cap);
 		nstr.m_buf = buf;
 		nstr.m_len = len;
 	}
@@ -2585,6 +2597,8 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		cap = _countof(g_app.m_tmp_nstrs[0]);
 		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_16);
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
+		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
+		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
 		parts_b[0] = parts_a[0]; parts_b[1] = parts_a[1]; parts_b[2] = parts_a[2]; parts_b[3] = parts_a[3];
 		mask = (((1u << (same_bits - 8)) - 1) << (CHAR_BIT - (same_bits - 8)));
 		parts_a[1] &= mask;
@@ -2593,7 +2607,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		parts_b[1] |=~ mask;
 		parts_b[2] = 0xff;
 		parts_b[3] = 0xff;
-		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_a[0], parts_a[1], same_bits, parts_a[0], parts_a[1], parts_a[2], parts_a[3], parts_b[0], parts_b[1], parts_b[2], parts_b[3]); mk_assert(len >= 1); mk_assert(len < cap);
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_c[0], parts_c[1], parts_c[2], parts_c[3], parts_d[0], parts_d[1], parts_d[2], parts_d[3]); mk_assert(len >= 1); mk_assert(len < cap);
 		nstr.m_buf = buf;
 		nstr.m_len = len;
 	}
@@ -2603,13 +2617,15 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		cap = _countof(g_app.m_tmp_nstrs[0]);
 		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_24);
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
+		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
+		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
 		parts_b[0] = parts_a[0]; parts_b[1] = parts_a[1]; parts_b[2] = parts_a[2]; parts_b[3] = parts_a[3];
 		mask = (((1u << (same_bits - 16)) - 1) << (CHAR_BIT - (same_bits - 16)));
 		parts_a[2] &= mask;
 		parts_a[3] = 0x00;
 		parts_b[2] |=~ mask;
 		parts_b[3] = 0xff;
-		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_a[0], parts_a[1], parts_a[2], same_bits, parts_a[0], parts_a[1], parts_a[2], parts_a[3], parts_b[0], parts_b[1], parts_b[2], parts_b[3]); mk_assert(len >= 1); mk_assert(len < cap);
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_c[0], parts_c[1], parts_c[2], parts_c[3], parts_d[0], parts_d[1], parts_d[2], parts_d[3]); mk_assert(len >= 1); mk_assert(len < cap);
 		nstr.m_buf = buf;
 		nstr.m_len = len;
 	}
@@ -2619,11 +2635,13 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		cap = _countof(g_app.m_tmp_nstrs[0]);
 		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_32);
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
+		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
+		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
 		parts_b[0] = parts_a[0]; parts_b[1] = parts_a[1]; parts_b[2] = parts_a[2]; parts_b[3] = parts_a[3];
 		mask = (((1u << (same_bits - 24)) - 1) << (CHAR_BIT - (same_bits - 24)));
 		parts_a[3] &= mask;
 		parts_b[3] |=~ mask;
-		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_a[0], parts_a[1], parts_a[2], parts_a[3], same_bits, parts_a[0], parts_a[1], parts_a[2], parts_a[3], parts_b[0], parts_b[1], parts_b[2], parts_b[3]); mk_assert(len >= 1); mk_assert(len < cap);
+		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_c[0], parts_c[1], parts_c[2], parts_c[3], parts_d[0], parts_d[1], parts_d[2], parts_d[3]); mk_assert(len >= 1); mk_assert(len < cap);
 		nstr.m_buf = buf;
 		nstr.m_len = len;
 	}
