@@ -21,6 +21,7 @@ call "c:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 goto :mk_next
 
 :mk_next
+ml64 /c memclr_amd64.asm
 ml64 /c memcpy_amd64.asm
 set INCLUDE=%INCLUDE%;c:\path\to\phnt
 cl ^
@@ -40,6 +41,7 @@ cl ^
 /Brepro ^
 mkfw.cpp ^
 /link ^
+memclr_amd64.obj ^
 memcpy_amd64.obj ^
 /NODEFAULTLIB ^
 /LTCG ^

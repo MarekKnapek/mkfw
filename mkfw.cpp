@@ -311,6 +311,8 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 #define mk_max(a, b)((b)<(a)?(a):(b))
 #define mk_clamp(x, lo, hi)mk_min(mk_max((lo),(x)),(hi))
 
+extern "C" void __cdecl mk_memclr(void* const dst, size_t const len) noexcept;
+
 template<typename t>
 struct mk_defer_t
 {
@@ -410,7 +412,6 @@ template<typename t, size_t n>
 
 #define mk_x_ntdll_funcs() \
 	x(_snprintf) \
-	x(memset) \
 	x(qsort) \
 	x(wcslen) \
 	x(wcsncmp) \
@@ -1914,8 +1915,8 @@ static inline void mkfw_load_all(PPEB const peb)
 	g_app.m_funcs_comctl.m_pfn_InitCommonControls();
 	g_app.m_dlls.m_exe = g_app.m_funcs_kernel.m_pfn_GetModuleHandleW(NULL);
 
-	g_app.m_funcs_ntdll.m_pfn_memset(g_app.m_tmp_nstrs, 0x00, sizeof(g_app.m_tmp_nstrs));
-	g_app.m_funcs_ntdll.m_pfn_memset(g_app.m_tmp_wstrs, 0x00, sizeof(g_app.m_tmp_wstrs));
+	mk_memclr(g_app.m_tmp_nstrs, sizeof(g_app.m_tmp_nstrs));
+	mk_memclr(g_app.m_tmp_wstrs, sizeof(g_app.m_tmp_wstrs));
 }
 
 [[nodiscard]] static inline mk_view_wstr_t guid_to_text(GUID const* const guid)
@@ -1966,7 +1967,7 @@ static inline void mkfw_load_all(PPEB const peb)
 
 	mk_assert(guid);
 
-	g_app.m_funcs_ntdll.m_pfn_memset(&guid_null, 0x00, sizeof(guid_null));
+	mk_memclr(&guid_null, sizeof(guid_null));
 	eq = guid_eq(guid, &guid_null);
 	is = eq;
 	return is;
@@ -3862,10 +3863,10 @@ static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int
 	mk_to_lower(&nt_path_buf[0], nt_path_len);
 	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
-	g_app.m_funcs_ntdll.m_pfn_memset(&filter_ipv4, 0x00, sizeof(filter_ipv4));
-	g_app.m_funcs_ntdll.m_pfn_memset(&filter_ipv6, 0x00, sizeof(filter_ipv6));
-	g_app.m_funcs_ntdll.m_pfn_memset(&conditions_ipv4, 0x00, sizeof(conditions_ipv4));
-	g_app.m_funcs_ntdll.m_pfn_memset(&conditions_ipv6, 0x00, sizeof(conditions_ipv6));
+	mk_memclr(&filter_ipv4, sizeof(filter_ipv4));
+	mk_memclr(&filter_ipv6, sizeof(filter_ipv6));
+	mk_memclr(&conditions_ipv4, sizeof(conditions_ipv4));
+	mk_memclr(&conditions_ipv6, sizeof(conditions_ipv6));
 
 	blob_v4.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
 	blob_v4.data = ((UINT8*)(&nt_path_buf[0]));
@@ -3997,7 +3998,7 @@ static inline void mkfw_wnd_insert(mk_wnd_t* const self)
 	path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	path_cap = _countof(g_app.m_tmp_wstrs[0]);
 	path_buf[0] = L'\0';
-	g_app.m_funcs_ntdll.m_pfn_memset(&name, 0x00, sizeof(name));
+	mk_memclr(&name, sizeof(name));
 	name.lStructSize = sizeof(name);
 	name.hwndOwner = self->m_hwnd;
 	name.lpstrFilter = nstr_to_wstr(k_konst.m_nstrs.open_filter).m_buf;
