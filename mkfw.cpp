@@ -3987,6 +3987,8 @@ static inline void mkfw_wnd_insert(mk_wnd_t* const self)
 {
 	LPWSTR path_buf;
 	int path_cap;
+	mk_view_wstr_t filter;
+	mk_view_wstr_t title;
 	OPENFILENAMEW name;
 	BOOL b;
 	int len;
@@ -3999,13 +4001,15 @@ static inline void mkfw_wnd_insert(mk_wnd_t* const self)
 	path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	path_cap = _countof(g_app.m_tmp_wstrs[0]);
 	path_buf[0] = L'\0';
+	filter = nstr_to_wstr(k_konst.m_nstrs.open_filter);
+	title = nstr_to_wstr(k_konst.m_nstrs.open_title);
 	mk_memclr(&name, sizeof(name));
 	name.lStructSize = sizeof(name);
 	name.hwndOwner = self->m_hwnd;
-	name.lpstrFilter = nstr_to_wstr(k_konst.m_nstrs.open_filter).m_buf;
+	name.lpstrFilter = filter.m_buf;
 	name.lpstrFile = path_buf;
 	name.nMaxFile = path_cap;
-	name.lpstrTitle = nstr_to_wstr(k_konst.m_nstrs.open_title).m_buf;
+	name.lpstrTitle = title.m_buf;
 	name.Flags = OFN_HIDEREADONLY | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER | OFN_ENABLESIZING;
 	b = g_app.m_funcs_comdlg.m_pfn_GetOpenFileNameW(&name);
 	if(b && name.lpstrFile && name.lpstrFile[0] != L'\0')
