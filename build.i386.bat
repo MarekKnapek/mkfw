@@ -21,7 +21,6 @@ call "c:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 goto :mk_next
 
 :mk_next
-ml /c memclr_i386.asm
 ml /c memcpy_i386.asm
 set INCLUDE=%INCLUDE%;c:\path\to\phnt
 cl ^
@@ -41,7 +40,6 @@ cl ^
 /Brepro ^
 mkfw.cpp ^
 /link ^
-memclr_i386.obj ^
 memcpy_i386.obj ^
 /NODEFAULTLIB ^
 /LTCG ^

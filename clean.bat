@@ -5,8 +5,6 @@
 
 :mk_inner
 @echo off
-call :mk_delete "%~dp0memclr_amd64.obj" || goto :mk_bad
-call :mk_delete "%~dp0memclr_i386.obj" || goto :mk_bad
 call :mk_delete "%~dp0memcpy_amd64.obj" || goto :mk_bad
 call :mk_delete "%~dp0memcpy_i386.obj" || goto :mk_bad
 call :mk_delete "%~dp0mkfw.amd64.exe" || goto :mk_bad

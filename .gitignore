@@ -1,5 +1,3 @@
-/memclr_amd64.obj
-/memclr_i386.obj
 /memcpy_amd64.obj
 /memcpy_i386.obj
 /mkfw.amd64.exe

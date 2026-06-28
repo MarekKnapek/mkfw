@@ -311,8 +311,6 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 #define mk_max(a, b)((b)<(a)?(a):(b))
 #define mk_clamp(x, lo, hi)mk_min(mk_max((lo),(x)),(hi))
 
-extern "C" void __cdecl mk_memclr(void* const dst, size_t const len) noexcept;
-
 template<typename t>
 struct mk_defer_t
 {
@@ -3864,10 +3862,10 @@ static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int
 	mk_to_lower(&nt_path_buf[0], nt_path_len);
 	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
-	mk_memclr(&filter_ipv4, sizeof(filter_ipv4));
-	mk_memclr(&filter_ipv6, sizeof(filter_ipv6));
-	mk_memclr(&conditions_ipv4[0], sizeof(conditions_ipv4));
-	mk_memclr(&conditions_ipv6[0], sizeof(conditions_ipv6));
+	g_app.m_funcs_ntdll.m_pfn_memset(&filter_ipv4, 0x00, sizeof(filter_ipv4));
+	g_app.m_funcs_ntdll.m_pfn_memset(&filter_ipv6, 0x00, sizeof(filter_ipv6));
+	g_app.m_funcs_ntdll.m_pfn_memset(&conditions_ipv4, 0x00, sizeof(conditions_ipv4));
+	g_app.m_funcs_ntdll.m_pfn_memset(&conditions_ipv6, 0x00, sizeof(conditions_ipv6));
 
 	blob_v4.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
 	blob_v4.data = ((UINT8*)(&nt_path_buf[0]));
@@ -3987,8 +3985,6 @@ static inline void mkfw_wnd_insert(mk_wnd_t* const self)
 {
 	LPWSTR path_buf;
 	int path_cap;
-	mk_view_wstr_t filter;
-	mk_view_wstr_t title;
 	OPENFILENAMEW name;
 	BOOL b;
 	int len;
@@ -4001,15 +3997,13 @@ static inline void mkfw_wnd_insert(mk_wnd_t* const self)
 	path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	path_cap = _countof(g_app.m_tmp_wstrs[0]);
 	path_buf[0] = L'\0';
-	filter = nstr_to_wstr(k_konst.m_nstrs.open_filter);
-	title = nstr_to_wstr(k_konst.m_nstrs.open_title);
-	mk_memclr(&name, sizeof(name));
+	g_app.m_funcs_ntdll.m_pfn_memset(&name, 0x00, sizeof(name));
 	name.lStructSize = sizeof(name);
 	name.hwndOwner = self->m_hwnd;
-	name.lpstrFilter = filter.m_buf;
+	name.lpstrFilter = nstr_to_wstr(k_konst.m_nstrs.open_filter).m_buf;
 	name.lpstrFile = path_buf;
 	name.nMaxFile = path_cap;
-	name.lpstrTitle = title.m_buf;
+	name.lpstrTitle = nstr_to_wstr(k_konst.m_nstrs.open_title).m_buf;
 	name.Flags = OFN_HIDEREADONLY | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER | OFN_ENABLESIZING;
 	b = g_app.m_funcs_comdlg.m_pfn_GetOpenFileNameW(&name);
 	if(b && name.lpstrFile && name.lpstrFile[0] != L'\0')
