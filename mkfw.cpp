@@ -4,6 +4,7 @@
 #include <CommCtrl.h>
 #include <fwpmu.h>
 #include <sddl.h>
+#include <commdlg.h>
 
 #include <algorithm>
 #include <array>
@@ -399,6 +400,7 @@ template<typename t, size_t n>
 	x(fwpuclnt)\
 	x(user32)\
 	x(comctl32)\
+	x(comdlg32)\
 
 #define mk_x_dlls_to_load() \
 	x(advapi32)\
@@ -406,6 +408,7 @@ template<typename t, size_t n>
 	x(fwpuclnt)\
 	x(user32)\
 	x(comctl32)\
+	x(comdlg32)\
 
 #define mk_x_ntdll_funcs() \
 	x(_snprintf) \
@@ -420,7 +423,10 @@ int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(swprintf, mk_fn_swprintf) \
 
 #define mk_x_kernel_funcs() \
+	x(CloseHandle) \
+	x(CreateFileW) \
 	x(ExitProcess) \
+	x(GetFinalPathNameByHandleW) \
 	x(GetModuleHandleW) \
 	x(GetProcessHeap) \
 	x(GlobalAlloc) \
@@ -523,6 +529,9 @@ int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 #define mk_x_comctl_funcs() \
 	x(InitCommonControls) \
 
+#define mk_x_comdlg_funcs() \
+	x(GetOpenFileNameW) \
+
 #define mk_x_all_funcs() \
 	mk_x_ntdll_funcs() \
 	mk_x_kernel_funcs() \
@@ -531,6 +540,7 @@ int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	mk_x_fw_funcs() \
 	mk_x_user_funcs() \
 	mk_x_comctl_funcs() \
+	mk_x_comdlg_funcs() \
 
 #define mk_x_hash_strings() \
 	x(ntdll, "ntdll.dll") \
@@ -538,6 +548,7 @@ int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 
 #define mk_x_nstrings() \
 	x(action, "Action") \
+	x(block_added, "Filters succesfully added.") \
 	x(delete_caption, "Delete?") \
 	x(delete_fmt, "Do you want to delete this FireWall filter?\x0d\x0a%s") \
 	x(delete_ok_caption, "Delete.") \
@@ -596,6 +607,8 @@ int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(nl, "\x0d\x0a") \
 	x(none, "[ none ]") \
 	x(note, "Note") \
+	x(open_filter, "Executable files.\0*.exe\0All files.\0*\0") \
+	x(open_title, "Select executable file to block.") \
 	x(protocol_gre, "GRE") \
 	x(protocol_icmpv4, "ICMPv4") \
 	x(protocol_icmpv6, "ICMPv6") \
@@ -1645,6 +1658,14 @@ struct mk_funcs_comctl_s
 };
 typedef struct mk_funcs_comctl_s mk_funcs_comctl_t;
 
+struct mk_funcs_comdlg_s
+{
+	#define x(name) tfn_##name m_pfn_##name;
+	mk_x_comdlg_funcs()
+	#undef x
+};
+typedef struct mk_funcs_comdlg_s mk_funcs_comdlg_t;
+
 struct mk_dlls_s
 {
 	#define x(name) HMODULE m_##name;
@@ -1664,6 +1685,7 @@ struct mk_app_s
 	mk_funcs_fw_t m_funcs_fw;
 	mk_funcs_user_t m_funcs_user;
 	mk_funcs_comctl_t m_funcs_comctl;
+	mk_funcs_comdlg_t m_funcs_comdlg;
 	mk_fw_t m_fw;
 	mk_wnd_t m_fw_wnd;
 	UINT m_tmps_nstr_idx;
@@ -1885,6 +1907,10 @@ static inline void mkfw_load_all(PPEB const peb)
 
 	#define x(name) g_app.m_funcs_comctl.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_comctl32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_comctl.m_pfn_##name); if(k_debug){ if(!g_app.m_funcs_comctl.m_pfn_##name){ my_MessageBoxA(0, "Could not find `" #name "'.", 0, 0); } }
 	mk_x_comctl_funcs()
+	#undef x
+
+	#define x(name) g_app.m_funcs_comdlg.m_pfn_##name = ((tfn_##name)(find_proc(peb, g_app.m_dlls.m_comdlg32, k_konst.m_hash_##name))); mk_assert(g_app.m_funcs_comdlg.m_pfn_##name); if(k_debug){ if(!g_app.m_funcs_comdlg.m_pfn_##name){ my_MessageBoxA(0, "Could not find `" #name "'.", 0, 0); } }
+	mk_x_comdlg_funcs()
 	#undef x
 
 	g_app.m_funcs_comctl.m_pfn_InitCommonControls();
@@ -3789,8 +3815,9 @@ static inline void mk_last_slash(LPCWSTR const buf, int const len, LPCWSTR* cons
 	}
 }
 
-static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len)
+static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
+	bool success;
 	SECURITY_ATTRIBUTES sa;
 	HANDLE hfile;
 	LPWSTR nt_path_buf;
@@ -3813,23 +3840,26 @@ static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int
 	FWP_RANGE0 range_ipv6;
 	LPWSTR name_ipv6;
 	LPWSTR desc_ipv6;
-	bool success;
 	DWORD st;
 
 	mk_assert(fw);
 	mk_assert(path_buf);
 	mk_assert(path_buf[path_len] == L'\0');
 	mk_assert(path_len >= 1);
+	mk_assert(gud);
 
+	*gud = false;
+	success = false;
+	make_defer([&](){ *gud = success; });
 	sa.nLength = sizeof(sa);
 	sa.lpSecurityDescriptor = NULL;
 	sa.bInheritHandle = FALSE;
-	hfile = CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	make_defer([&](){ BOOL b; b = CloseHandle(hfile); mk_assert(b); });
+	make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
 	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
+	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
 	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
 	mk_to_lower(&nt_path_buf[0], nt_path_len);
 	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
@@ -3953,6 +3983,43 @@ static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int
 	success = true;
 }
 
+static inline void mkfw_wnd_insert(mk_wnd_t* const self)
+{
+	LPWSTR path_buf;
+	int path_cap;
+	OPENFILENAMEW name;
+	BOOL b;
+	int len;
+	bool success;
+	int res;
+
+	mk_assert(self);
+	mk_assert(self->m_fw);
+
+	path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
+	path_cap = _countof(g_app.m_tmp_wstrs[0]);
+	path_buf[0] = L'\0';
+	mk_memclr(&name, sizeof(name));
+	name.lStructSize = sizeof(name);
+	name.hwndOwner = self->m_hwnd;
+	name.lpstrFilter = nstr_to_wstr(k_konst.m_nstrs.open_filter).m_buf;
+	name.lpstrFile = path_buf;
+	name.nMaxFile = path_cap;
+	name.lpstrTitle = nstr_to_wstr(k_konst.m_nstrs.open_title).m_buf;
+	name.Flags = OFN_HIDEREADONLY | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER | OFN_ENABLESIZING;
+	b = g_app.m_funcs_comdlg.m_pfn_GetOpenFileNameW(&name);
+	if(b && name.lpstrFile && name.lpstrFile[0] != L'\0')
+	{
+		len = (int)g_app.m_funcs_ntdll.m_pfn_wcslen(name.lpstrFile);
+		mkfw_block_exe(self->m_fw, name.lpstrFile, len, &success);
+		mkfw_wnd_refresh(self);
+		if(success)
+		{
+			res = g_app.m_funcs_user.m_pfn_MessageBoxW(self->m_hwnd, nstr_to_wstr(k_konst.m_nstrs.block_added).m_buf, nstr_to_wstr(k_konst.m_nstrs.fire_wall).m_buf, MB_OK | MB_ICONINFORMATION); ((void)(res));
+		}
+	}
+}
+
 static inline void mkfw_wnd_proc__notify_entries___keydown_tab(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
 {
 	HWND prev;
@@ -3961,6 +4028,11 @@ static inline void mkfw_wnd_proc__notify_entries___keydown_tab(mk_wnd_t* const s
 
 	self->m_last_sub_window_focus = mk_wnd_sub_window_id_e_conditions;
 	prev = g_app.m_funcs_user.m_pfn_SetFocus(self->m_conditions); ((void)(prev));
+}
+
+static inline void mkfw_wnd_proc__notify_entries___keydown_ins(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
+{
+	mkfw_wnd_insert(self);
 }
 
 static inline void mkfw_wnd_proc__notify_entries___keydown_del(mk_wnd_t* const self, HWND const hwnd, UINT const msg, WPARAM const wparam, LPARAM const lparam, bool* const out_call_def, LRESULT* const out_lr)
@@ -4011,6 +4083,7 @@ static inline void mkfw_wnd_proc__notify_entries__keydown(mk_wnd_t* const self, 
 	switch(keydown->wVKey)
 	{
 		case VK_TAB   : mkfw_wnd_proc__notify_entries___keydown_tab (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
+		case VK_INSERT: mkfw_wnd_proc__notify_entries___keydown_ins (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 		case VK_DELETE: mkfw_wnd_proc__notify_entries___keydown_del (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 		case VK_APPS  : mkfw_wnd_proc__notify_entries___keydown_apps(self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
 		case VK_F5    : mkfw_wnd_proc__notify_entries___keydown_f5  (self, hwnd, msg, wparam, lparam, out_call_def, out_lr); break;
