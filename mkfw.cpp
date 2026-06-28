@@ -316,8 +316,9 @@ extern "C" void __cdecl mk_memclr(void* const dst, size_t const len) noexcept;
 template<typename t>
 struct mk_defer_t
 {
-	mk_defer_t(t&& fnc) noexcept :
-		m_fnc(std::move(fnc))
+	template<typename u>
+	mk_defer_t(u&& fnc) noexcept :
+		m_fnc(std::forward<u>(fnc))
 	{
 	}
 	~mk_defer_t() noexcept
@@ -326,11 +327,10 @@ struct mk_defer_t
 	}
 	t m_fnc;
 };
-template<typename t>
-auto mk_defer_make(t&& fnc){ return mk_defer_t<t>{std::move(fnc)}; }
+template<typename t> [[nodiscard]] mk_defer_t<t> mk_defer_make(t&& fnc){ return mk_defer_t<t>{std::move(fnc)}; }
 #define mk_concat2(a, b) a ## b
 #define mk_concat(a, b) mk_concat2(a, b)
-#define make_defer(x) auto mk_concat(defer_, __LINE__) = mk_defer_make(x)
+#define mk_make_defer(x) auto const mk_concat(defer_, __LINE__) = mk_defer_make(x)
 
 template<typename t, size_t n>
 struct mk_view_t
@@ -3849,13 +3849,13 @@ static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int
 
 	*gud = false;
 	success = false;
-	make_defer([&](){ *gud = success; });
+	mk_make_defer([&](){ *gud = success; });
 	sa.nLength = sizeof(sa);
 	sa.lpSecurityDescriptor = NULL;
 	sa.bInheritHandle = FALSE;
 	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
+	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
 	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
 	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
@@ -3975,7 +3975,7 @@ static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int
 
 	success = false;
 	st = g_app.m_funcs_fw.m_pfn_FwpmTransactionBegin0(fw->m_eng, 0); if(st != ERROR_SUCCESS){ return; }
-	make_defer([&](){ DWORD st; if(!success){ st = g_app.m_funcs_fw.m_pfn_FwpmTransactionAbort0(fw->m_eng); ((void)(st)); } });
+	mk_make_defer([&](){ DWORD st; if(!success){ st = g_app.m_funcs_fw.m_pfn_FwpmTransactionAbort0(fw->m_eng); ((void)(st)); } });
 	st = g_app.m_funcs_fw.m_pfn_FwpmFilterAdd0(fw->m_eng, &filter_ipv4, NULL, NULL); if(st != ERROR_SUCCESS){ return; }
 	st = g_app.m_funcs_fw.m_pfn_FwpmFilterAdd0(fw->m_eng, &filter_ipv6, NULL, NULL); if(st != ERROR_SUCCESS){ return; }
 	st = g_app.m_funcs_fw.m_pfn_FwpmTransactionCommit0(fw->m_eng); if(st != ERROR_SUCCESS){ return; }
