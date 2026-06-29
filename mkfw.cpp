@@ -311,7 +311,55 @@ static inline FARPROC find_proc(PPEB const peb, HMODULE const& mod, DWORD const&
 #define mk_max(a, b)((b)<(a)?(a):(b))
 #define mk_clamp(x, lo, hi)mk_min(mk_max((lo),(x)),(hi))
 
-extern "C" void __cdecl mk_memclr(void* const dst, size_t const len) noexcept;
+extern "C" [[nodiscard]] void* __cdecl mk_memcpy_asm(void* const dst, void const* const src, size_t const cnt) noexcept;
+extern "C" void __cdecl mk_memclr_asm(void* const dst, size_t const cnt) noexcept;
+extern "C" [[nodiscard]] size_t __cdecl mk_wcslen_asm(wchar_t const* const str) noexcept;
+extern "C" [[nodiscard]] int __cdecl wcsncmp_asm(wchar_t const* const stra, wchar_t const* const strb, size_t const cnt) noexcept;
+
+static inline void* mk_memcpy_c(void* const dst, void const* const src, size_t const cnt) noexcept
+{
+	mk_assert(dst || cnt == 0);
+	mk_assert(src || cnt == 0);
+	mk_assert(cnt >= 0);
+	mk_assert((((unsigned char*)(dst)) + cnt <= ((unsigned char*)(src))) || (((unsigned char*)(dst)) >= ((unsigned char*)(src)) + cnt));
+	mk_assert((((unsigned char*)(src)) + cnt <= ((unsigned char*)(dst))) || (((unsigned char*)(src)) >= ((unsigned char*)(dst)) + cnt));
+
+	return mk_memcpy_asm(dst, src, cnt);
+}
+
+static inline void mk_memclr_c(void* const dst, size_t const cnt) noexcept
+{
+	mk_assert(dst || cnt == 0);
+	mk_assert(cnt >= 0);
+
+	mk_memclr_asm(dst, cnt);
+}
+
+[[nodiscard]] static inline size_t mk_wcslen_c(wchar_t const* const str) noexcept
+{
+	size_t len;
+
+	mk_assert(str);
+	mk_assert(((uintptr_t)(str)) % sizeof(*str) == 0);
+
+	len = mk_wcslen_asm(str);
+	mk_assert(((int(__cdecl*)(wchar_t const*))(GetProcAddress(GetModuleHandleA("ntdll.dll"), "wcslen")))(str) == len);
+	return len;
+}
+
+[[nodiscard]] static inline int wcsncmp_c(wchar_t const* const stra, wchar_t const* const strb, size_t const cnt) noexcept
+{
+	int cmp;
+
+	mk_assert(stra);
+	mk_assert(strb);
+	mk_assert(cnt >= 1);
+	mk_assert(stra[cnt - 1] == L'\0' || strb[cnt - 1] == L'\0');
+
+	cmp = wcsncmp_asm(stra, strb, cnt);
+	mk_assert(((int(__cdecl*)(wchar_t const*, wchar_t const*, size_t))(GetProcAddress(GetModuleHandleA("ntdll.dll"), "wcsncmp")))(stra, strb, cnt) == cmp);
+	return cmp;
+}
 
 template<typename t>
 struct mk_defer_t
@@ -339,14 +387,14 @@ struct mk_view_t
 };
 
 template<typename t>
-struct mk_view_t<t, 0>
+struct mk_view_t<t, -1>
 {
 	t const* m_buf;
 	size_t m_len;
 };
 
-typedef typename mk_view_t<CHAR, 0> mk_view_nstr_t;
-typedef typename mk_view_t<WCHAR, 0> mk_view_wstr_t;
+typedef typename mk_view_t<CHAR, -1> mk_view_nstr_t;
+typedef typename mk_view_t<WCHAR, -1> mk_view_wstr_t;
 
 template<typename t, size_t n>
 [[nodiscard]] bool operator==(mk_view_t<t, n> const& a, mk_view_t<t, n> const& b)
@@ -381,7 +429,7 @@ template<typename t, size_t n>
 	mk_assert((dst + cnt <= src) || (dst >= src + cnt));
 	mk_assert((src + cnt <= dst) || (src >= dst + cnt));
 
-	std::memcpy(dst, src, cnt * sizeof(*dst));
+	mk_memcpy_c(dst, src, cnt * sizeof(*dst));
 	end = dst + cnt;
 	return end;
 }
@@ -413,8 +461,6 @@ template<typename t, size_t n>
 #define mk_x_ntdll_funcs() \
 	x(_snprintf) \
 	x(qsort) \
-	x(wcslen) \
-	x(wcsncmp) \
 
 int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 
@@ -1828,7 +1874,7 @@ template<size_t nn>
 	if(win_str)
 	{
 		wstr.m_buf = win_str;
-		wstr.m_len = g_app.m_funcs_ntdll.m_pfn_wcslen(win_str);
+		wstr.m_len = mk_wcslen_c(win_str);
 	}
 	else
 	{
@@ -1915,8 +1961,8 @@ static inline void mkfw_load_all(PPEB const peb)
 	g_app.m_funcs_comctl.m_pfn_InitCommonControls();
 	g_app.m_dlls.m_exe = g_app.m_funcs_kernel.m_pfn_GetModuleHandleW(NULL);
 
-	mk_memclr(g_app.m_tmp_nstrs, sizeof(g_app.m_tmp_nstrs));
-	mk_memclr(g_app.m_tmp_wstrs, sizeof(g_app.m_tmp_wstrs));
+	mk_memclr_c(g_app.m_tmp_nstrs, sizeof(g_app.m_tmp_nstrs));
+	mk_memclr_c(g_app.m_tmp_wstrs, sizeof(g_app.m_tmp_wstrs));
 }
 
 [[nodiscard]] static inline mk_view_wstr_t guid_to_text(GUID const* const guid)
@@ -1967,7 +2013,7 @@ static inline void mkfw_load_all(PPEB const peb)
 
 	mk_assert(guid);
 
-	mk_memclr(&guid_null, sizeof(guid_null));
+	mk_memclr_c(&guid_null, sizeof(guid_null));
 	eq = guid_eq(guid, &guid_null);
 	is = eq;
 	return is;
@@ -2064,7 +2110,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	std::memcpy(&fmt[0], k_konst.m_nstrs.fmt_u8.data(), k_konst.m_nstrs.fmt_u8.size());
+	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_u8.data(), k_konst.m_nstrs.fmt_u8.size());
 	fmt[k_konst.m_nstrs.fmt_u8.size()] = '\0';
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, ((int)(u8)), ((int)(u8))); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
@@ -2083,7 +2129,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	std::memcpy(&fmt[0], k_konst.m_nstrs.fmt_u16.data(), k_konst.m_nstrs.fmt_u16.size());
+	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_u16.data(), k_konst.m_nstrs.fmt_u16.size());
 	fmt[k_konst.m_nstrs.fmt_u16.size()] = '\0';
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, ((int)(u16)), ((int)(u16))); mk_assert(len >= 1); mk_assert(len < cap);
 	buf[len] = '\0';
@@ -2105,7 +2151,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	std::memcpy(&fmt[0], k_konst.m_nstrs.fmt_u32.data(), k_konst.m_nstrs.fmt_u32.size());
+	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_u32.data(), k_konst.m_nstrs.fmt_u32.size());
 	fmt[k_konst.m_nstrs.fmt_u32.size()] = '\0';
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, *((unsigned int*)(&u32)), *((unsigned int*)(&u32))); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
@@ -2126,7 +2172,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	std::memcpy(&fmt[0], k_konst.m_nstrs.fmt_u64.data(), k_konst.m_nstrs.fmt_u64.size());
+	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_u64.data(), k_konst.m_nstrs.fmt_u64.size());
 	fmt[k_konst.m_nstrs.fmt_u64.size()] = '\0';
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, *((unsigned long long*)(u64)), *((unsigned long long*)(u64))); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
@@ -2217,7 +2263,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	std::memcpy(&fmt[0], k_konst.m_nstrs.fmt_arr16.data(), k_konst.m_nstrs.fmt_arr16.size());
+	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_arr16.data(), k_konst.m_nstrs.fmt_arr16.size());
 	fmt[k_konst.m_nstrs.fmt_arr16.size()] = '\0';
 	arr16_to_arr8(&arr16->byteArray16[0], &parts[0]);
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]); mk_assert(len >= 1); mk_assert(len < cap);
@@ -2237,10 +2283,10 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	mk_assert(sd);
 
 	b = g_app.m_funcs_advapi.m_pfn_ConvertSecurityDescriptorToStringSecurityDescriptorW(((PSECURITY_DESCRIPTOR)(sd->data)), SDDL_REVISION_1, OWNER_SECURITY_INFORMATION  | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | SACL_SECURITY_INFORMATION, &win_buf, NULL); mk_assert(b);
-	len = g_app.m_funcs_ntdll.m_pfn_wcslen(win_buf);
+	len = mk_wcslen_c(win_buf);
 	mk_assert(len < _countof(g_app.m_tmp_wstrs[0]));
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	std::memcpy(&buf[0], win_buf, (len + 1) * sizeof(buf[0]));
+	mk_memcpy_c(&buf[0], win_buf, (len + 1) * sizeof(buf[0]));
 	g_app.m_funcs_kernel.m_pfn_LocalFree(win_buf);
 	wstr.m_buf = buf;
 	wstr.m_len = len;
@@ -2263,7 +2309,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	b = g_app.m_funcs_advapi.m_pfn_ConvertSidToStringSidW(((PSID)(sid)), &txt_sid); mk_assert(b);
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_wcslen(txt_sid);
+	len = mk_wcslen_c(txt_sid);
 	ptr = mk_memcpy(buf, txt_sid, len + 1); ((void)(ptr));
 	hloc = g_app.m_funcs_kernel.m_pfn_LocalFree(txt_sid); mk_assert(!hloc);
 	wstr.m_buf = buf;
@@ -2376,7 +2422,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 		mk_assert(len < _countof(g_app.m_tmp_nstrs[0]));
 		bufa = &k_konst.m_action_types.m_txt_buf[offa];
 		bufb = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
-		std::memcpy(bufb, bufa, len);
+		mk_memcpy_c(bufb, bufa, len);
 		bufb[len] = '\0';
 		nstr.m_buf = bufb;
 		nstr.m_len = len;
@@ -2543,7 +2589,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	std::memcpy(&fmt[0], k_konst.m_nstrs.fmt_ipv4.data(), k_konst.m_nstrs.fmt_ipv4.size());
+	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_ipv4.data(), k_konst.m_nstrs.fmt_ipv4.size());
 	fmt[k_konst.m_nstrs.fmt_ipv4.size()] = '\0';
 	u32_to_arr4(u32, &parts[0]);
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], parts[3]); mk_assert(len >= 1); mk_assert(len < cap);
@@ -2606,7 +2652,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		std::memcpy(&fmt[0], k_konst.m_nstrs.fmt_ipv6_mask_32.data(), k_konst.m_nstrs.fmt_ipv6_mask_32.size());
+		mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_ipv6_mask_32.data(), k_konst.m_nstrs.fmt_ipv6_mask_32.size());
 		fmt[k_konst.m_nstrs.fmt_ipv6_mask_32.size()] = '\0';
 		arr16_to_arr8(&range->rangeValue->valueHigh.byteArray16->byteArray16[0], &parts[0]);
 		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], same_bits); mk_assert(len >= 1); mk_assert(len < cap);
@@ -2618,7 +2664,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		std::memcpy(&fmt[0], k_konst.m_nstrs.fmt_ipv6_mask_48.data(), k_konst.m_nstrs.fmt_ipv6_mask_48.size());
+		mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_ipv6_mask_48.data(), k_konst.m_nstrs.fmt_ipv6_mask_48.size());
 		fmt[k_konst.m_nstrs.fmt_ipv6_mask_48.size()] = '\0';
 		arr16_to_arr8(&range->rangeValue->valueLow.byteArray16->byteArray16[0], &parts[0]);
 		parts[2] &= (((1u << (same_bits - 32)) - 1) << (16 - (same_bits - 32)));
@@ -2631,7 +2677,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		std::memcpy(&fmt[0], k_konst.m_nstrs.fmt_ipv6_mask_128.data(), k_konst.m_nstrs.fmt_ipv6_mask_128.size());
+		mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_ipv6_mask_128.data(), k_konst.m_nstrs.fmt_ipv6_mask_128.size());
 		fmt[k_konst.m_nstrs.fmt_ipv6_mask_128.size()] = '\0';
 		arr16_to_arr8(&range->rangeValue->valueLow.byteArray16->byteArray16[0], &parts[0]);
 		parts[7] &= (((1u << (same_bits - 112)) - 1) << (16 - (same_bits - 112)));
@@ -3135,7 +3181,7 @@ static inline void mk_col_id_entry_sort_expand(int const collapsed, mk_col_id_en
 			txt_b = entry_to_wstr(entry_b, col_id);
 			txt_aa = direction ? &txt_a : &txt_b;
 			txt_bb = direction ? &txt_b : &txt_a;
-			cmp = g_app.m_funcs_ntdll.m_pfn_wcsncmp(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
+			cmp = wcsncmp_c(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
 		}
 		if(cmp == 0)
 		{
@@ -3143,7 +3189,7 @@ static inline void mk_col_id_entry_sort_expand(int const collapsed, mk_col_id_en
 			txt_b = entry_to_wstr(entry_b, mk_col_id_entry_e_layer);
 			txt_aa = direction ? &txt_a : &txt_b;
 			txt_bb = direction ? &txt_b : &txt_a;
-			cmp = g_app.m_funcs_ntdll.m_pfn_wcsncmp(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
+			cmp = wcsncmp_c(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
 		}
 		if(cmp == 0)
 		{
@@ -3151,7 +3197,7 @@ static inline void mk_col_id_entry_sort_expand(int const collapsed, mk_col_id_en
 			txt_b = entry_to_wstr(entry_b, mk_col_id_entry_e_filter);
 			txt_aa = direction ? &txt_a : &txt_b;
 			txt_bb = direction ? &txt_b : &txt_a;
-			cmp = g_app.m_funcs_ntdll.m_pfn_wcsncmp(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
+			cmp = wcsncmp_c(txt_aa->m_buf, txt_bb->m_buf, mk_min(txt_a.m_len, txt_b.m_len) + 1);
 		}
 	}
 	else
@@ -3398,12 +3444,12 @@ static inline void mk_fw_copy_cell(mk_wnd_t* const self)
 	info.item.iSubItem = self->m_col_idx_for_menu;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_hwnd, WM_NOTIFY, 0, ((LPARAM)(&info))); ((void)(lr));
 	wstr.m_buf = info.item.pszText;
-	wstr.m_len = g_app.m_funcs_ntdll.m_pfn_wcslen(wstr.m_buf);
+	wstr.m_len = mk_wcslen_c(wstr.m_buf);
 
 	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
 	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
 	ptr = g_app.m_funcs_kernel.m_pfn_GlobalLock(gl); mk_assert(ptr);
-	std::memcpy(ptr, wstr.m_buf, bytes_count);
+	mk_memcpy_c(ptr, wstr.m_buf, bytes_count);
 	b = g_app.m_funcs_kernel.m_pfn_GlobalUnlock(gl); mk_assert(b == 0 && GetLastError() == NO_ERROR);
 
 	b = g_app.m_funcs_user.m_pfn_OpenClipboard(self->m_conditions); mk_assert(b);
@@ -3863,10 +3909,10 @@ static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int
 	mk_to_lower(&nt_path_buf[0], nt_path_len);
 	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
-	mk_memclr(&filter_ipv4, sizeof(filter_ipv4));
-	mk_memclr(&filter_ipv6, sizeof(filter_ipv6));
-	mk_memclr(&conditions_ipv4, sizeof(conditions_ipv4));
-	mk_memclr(&conditions_ipv6, sizeof(conditions_ipv6));
+	mk_memclr_c(&filter_ipv4, sizeof(filter_ipv4));
+	mk_memclr_c(&filter_ipv6, sizeof(filter_ipv6));
+	mk_memclr_c(&conditions_ipv4, sizeof(conditions_ipv4));
+	mk_memclr_c(&conditions_ipv6, sizeof(conditions_ipv6));
 
 	blob_v4.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
 	blob_v4.data = ((UINT8*)(&nt_path_buf[0]));
@@ -3998,7 +4044,7 @@ static inline void mkfw_wnd_insert(mk_wnd_t* const self)
 	path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	path_cap = _countof(g_app.m_tmp_wstrs[0]);
 	path_buf[0] = L'\0';
-	mk_memclr(&name, sizeof(name));
+	mk_memclr_c(&name, sizeof(name));
 	name.lStructSize = sizeof(name);
 	name.hwndOwner = self->m_hwnd;
 	name.lpstrFilter = nstr_to_wstr(k_konst.m_nstrs.open_filter).m_buf;
@@ -4009,7 +4055,7 @@ static inline void mkfw_wnd_insert(mk_wnd_t* const self)
 	b = g_app.m_funcs_comdlg.m_pfn_GetOpenFileNameW(&name);
 	if(b && name.lpstrFile && name.lpstrFile[0] != L'\0')
 	{
-		len = (int)g_app.m_funcs_ntdll.m_pfn_wcslen(name.lpstrFile);
+		len = (int)mk_wcslen_c(name.lpstrFile);
 		mkfw_block_exe(self->m_fw, name.lpstrFile, len, &success);
 		mkfw_wnd_refresh(self);
 		if(success)
@@ -4293,7 +4339,7 @@ static inline void mkfw_wnd__proc__command__menu_copy_line(mk_wnd_t* const self,
 	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
 	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
 	ptr = g_app.m_funcs_kernel.m_pfn_GlobalLock(gl); mk_assert(ptr);
-	std::memcpy(ptr, wstr.m_buf, bytes_count);
+	mk_memcpy_c(ptr, wstr.m_buf, bytes_count);
 	b = g_app.m_funcs_kernel.m_pfn_GlobalUnlock(gl); mk_assert(b == 0 && GetLastError() == NO_ERROR);
 
 	b = g_app.m_funcs_kernel.m_pfn_HeapFree(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, ((LPVOID)(wstr.m_buf))); mk_assert(b);
@@ -4328,7 +4374,7 @@ static inline void mkfw_wnd__proc__command__menu_copy_table(mk_wnd_t* const self
 	bytes_count = (wstr.m_len + 1) * sizeof(*wstr.m_buf);
 	gl = g_app.m_funcs_kernel.m_pfn_GlobalAlloc(GMEM_MOVEABLE, bytes_count); mk_assert(gl);
 	ptr = g_app.m_funcs_kernel.m_pfn_GlobalLock(gl); mk_assert(ptr);
-	std::memcpy(ptr, wstr.m_buf, bytes_count);
+	mk_memcpy_c(ptr, wstr.m_buf, bytes_count);
 	b = g_app.m_funcs_kernel.m_pfn_GlobalUnlock(gl); mk_assert(b == 0 && GetLastError() == NO_ERROR);
 
 	b = g_app.m_funcs_kernel.m_pfn_HeapFree(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, ((LPVOID)(wstr.m_buf))); mk_assert(b);

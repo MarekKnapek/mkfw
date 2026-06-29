@@ -21,8 +21,10 @@ call "c:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 goto :mk_next
 
 :mk_next
-ml64 /c memclr_amd64.asm
-ml64 /c memcpy_amd64.asm
+ml64 /c memclr_amd64.asm || goto :mk_bad
+ml64 /c memcpy_amd64.asm || goto :mk_bad
+ml64 /c wcslen_amd64.asm || goto :mk_bad
+ml64 /c wcsncmp_amd64.asm || goto :mk_bad
 set INCLUDE=%INCLUDE%;c:\path\to\phnt
 cl ^
 /nologo ^
@@ -43,6 +45,8 @@ mkfw.cpp ^
 /link ^
 memclr_amd64.obj ^
 memcpy_amd64.obj ^
+wcslen_amd64.obj ^
+wcsncmp_amd64.obj ^
 /NODEFAULTLIB ^
 /LTCG ^
 /RELEASE ^

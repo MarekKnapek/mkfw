@@ -2,15 +2,18 @@
 
 .code
 
-_mk_memclr_asm proc
+_mk_wcslen_asm proc
 	mov edx, edi
 	mov edi, [esp + 1 * 4]
-	mov ecx, [esp + 2 * 4]
 	xor eax, eax
+	mov ecx, -1
 	cld
-	rep stosb
+	repne scasw
+	not ecx
+	dec ecx
+	mov eax, ecx
 	mov edi, edx
 	ret
-_mk_memclr_asm endp
+_mk_wcslen_asm endp
 
 end

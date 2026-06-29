@@ -1,14 +1,14 @@
 .code
 
-mk_memclr proc
+mk_memclr_asm proc
 	mov r10, rdi
-	mov rdi, rcx ; dst
-	mov rcx, rdx ; cnt
-	xor eax, eax ; val
-	cld          ; fwd
-	rep stosb    ; sto
+	mov rdi, rcx
+	mov rcx, rdx
+	xor eax, eax
+	cld
+	rep stosb
 	mov rdi, r10
 	ret
-mk_memclr endp
+mk_memclr_asm endp
 
 end

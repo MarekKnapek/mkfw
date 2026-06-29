@@ -21,8 +21,10 @@ call "c:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 goto :mk_next
 
 :mk_next
-ml /c memclr_i386.asm
-ml /c memcpy_i386.asm
+ml /c memclr_i386.asm || goto :mk_bad
+ml /c memcpy_i386.asm || goto :mk_bad
+ml /c wcslen_i386.asm || goto :mk_bad
+ml /c wcsncmp_i386.asm || goto :mk_bad
 set INCLUDE=%INCLUDE%;c:\path\to\phnt
 cl ^
 /nologo ^
@@ -43,6 +45,8 @@ mkfw.cpp ^
 /link ^
 memclr_i386.obj ^
 memcpy_i386.obj ^
+wcslen_i386.obj ^
+wcsncmp_i386.obj ^
 /NODEFAULTLIB ^
 /LTCG ^
 /RELEASE ^

@@ -6,3 +6,7 @@
 /mkfw.exe
 /mkfw.i386.exe
 /mkfw.obj
+/wcslen_amd64.obj
+/wcslen_i386.obj
+/wcsncmp_amd64.obj
+/wcsncmp_i386.obj
