@@ -162,7 +162,7 @@ constexpr static inline DWORD fnv1a(CHAR const(&str)[N]) noexcept
 template<typename t, size_t n>
 constexpr static inline auto make_zstr(t const(&name)[n])
 {
-	std::array<t, n - 1> arr{};
+	std::array<t, n - 1> arr;
 
 	mk_assert(name[n - 1] == '\0');
 
@@ -393,8 +393,17 @@ struct mk_view_t<t, -1>
 	size_t m_len;
 };
 
+template<typename t>
+struct mk_view_t<t, -2>
+{
+	t const* m_buf;
+	size_t m_len;
+};
+
 typedef typename mk_view_t<CHAR, -1> mk_view_nstr_t;
 typedef typename mk_view_t<WCHAR, -1> mk_view_wstr_t;
+typedef typename mk_view_t<CHAR, -2> mk_view_nstr_nz_t;
+typedef typename mk_view_t<WCHAR, -2> mk_view_wstr_nz_t;
 
 template<typename t, size_t n>
 [[nodiscard]] bool operator==(mk_view_t<t, n> const& a, mk_view_t<t, n> const& b)
@@ -1484,18 +1493,6 @@ mk_x_all_funcs()
 mk_x_ntdll2_funcs()
 #undef x
 
-struct mk_nstrs_s
-{
-	#define x(name, value) decltype(make_zstr(value)) ##name;
-	mk_x_nstrings()
-	#undef x
-
-	#define x(name) decltype(make_zstr(#name)) ##name;
-	mk_x_dlls_to_load()
-	#undef x
-};
-typedef struct mk_nstrs_s mk_nstrs_t;
-
 struct mk_konst_s
 {
 	#define x(name) DWORD m_hash_##name;
@@ -1509,7 +1506,6 @@ struct mk_konst_s
 	mk_x_hash_strings()
 	#undef x
 
-	mk_nstrs_t m_nstrs;
 	mk_guids_t m_guids;
 	matches_texts_t m_matches;
 	types_texts_t m_types;
@@ -1519,7 +1515,7 @@ typedef struct mk_konst_s mk_konst_t;
 
 [[nodiscard]] constexpr static inline mk_konst_t make_konst(void)
 {
-	mk_konst_t konst{};
+	mk_konst_t konst;
 
 	#define x(name) konst.m_hash_##name = fnv1a(#name);
 	mk_x_all_funcs()
@@ -1532,20 +1528,153 @@ typedef struct mk_konst_s mk_konst_t;
 	mk_x_hash_strings()
 	#undef x
 
-	#define x(name, value) konst.m_nstrs.##name = make_zstr(value);
-	mk_x_nstrings()
-	#undef x
-
-	#define x(name) konst.m_nstrs.##name = make_zstr(#name);
-	mk_x_dlls_to_load()
-	#undef x
-
 	konst.m_guids = make_guids();
 	konst.m_matches = matches_get_texts();
 	konst.m_types = types_get_texts();
 	konst.m_action_types = action_types_get_texts();
 	return konst;
 }
+
+template<std::size_t t_strings_cnt, std::size_t t_bytes_cnt>
+struct mk_strings
+{
+public:
+	static constexpr std::size_t const s_strings_cnt = t_strings_cnt;
+	static constexpr std::size_t const s_offsets_cnt = t_strings_cnt - 1;
+	static constexpr std::size_t const s_bytes_cnt = t_bytes_cnt;
+public:
+	enum string_id : std::size_t
+	{
+		#define xx(name, value) name,
+		#define x(name, value) xx(name, value)
+		mk_x_nstrings()
+		#undef x
+		#define x(name) xx(name, #name)
+		mk_x_dlls_to_load()
+		#undef x
+		#undef xx
+	};
+public:
+	[[nodiscard]] constexpr char const* get_str_ptr(string_id const& id) const noexcept
+	{
+		char const* str_ptr;
+
+		mk_assert(id >= 0);
+		mk_assert(id < s_strings_cnt);
+
+		if(id == 0)
+		{
+			str_ptr = &m_bytes_buf[0];
+		}
+		else
+		{
+			str_ptr = &m_bytes_buf[0] + m_offsets_buf[id - 1];
+		}
+		return str_ptr;
+	}
+	[[nodiscard]] constexpr int get_str_len(string_id const& id) const noexcept
+	{
+		int str_len;
+
+		mk_assert(id >= 0);
+		mk_assert(id < s_strings_cnt);
+
+		if(id == 0)
+		{
+			str_len = m_offsets_buf[1];
+		}
+		else if(id == s_strings_cnt - 1)
+		{
+			str_len = s_bytes_cnt - m_offsets_buf[id - 1];
+		}
+		else
+		{
+			str_len = m_offsets_buf[id - 0] - m_offsets_buf[id - 1];
+		}
+		return str_len;
+	}
+	[[nodiscard]] constexpr mk_view_nstr_nz_t get_nstr(string_id const& id) const noexcept
+	{
+		mk_view_nstr_nz_t nstr;
+
+		mk_assert(id >= 0);
+		mk_assert(id < s_strings_cnt);
+
+		nstr.m_buf = get_str_ptr(id);
+		nstr.m_len = get_str_len(id);
+		return nstr;
+	}
+public:
+	std::uint16_t m_offsets_buf[s_offsets_cnt];
+	char m_bytes_buf[s_bytes_cnt];
+};
+
+[[nodiscard]] constexpr static inline auto mk_strings_count(void) noexcept
+{
+	int i;
+
+	i = 0;
+	#define xx(name, value) ++i;
+	#define x(name, value) xx(name, value)
+	mk_x_nstrings()
+	#undef x
+	#define x(name) xx(name, #name)
+	mk_x_dlls_to_load()
+	#undef x
+	#undef xx
+	return i;
+}
+
+[[nodiscard]] constexpr static inline auto mk_strings_bytes_count(void) noexcept
+{
+	int i;
+
+	i = 0;
+	#define xx(name, value) i += std::size(value) - 1;
+	#define x(name, value) xx(name, value)
+	mk_x_nstrings()
+	#undef x
+	#define x(name) xx(name, #name)
+	mk_x_dlls_to_load()
+	#undef x
+	#undef xx
+	return i;
+}
+
+[[nodiscard]] constexpr static inline auto mk_strings_make(void) noexcept
+{
+	mk_strings<mk_strings_count(), mk_strings_bytes_count()> strings;
+	int i;
+	std::uint16_t offset;
+	std::uint16_t cur_len;
+	char const* begin;
+
+	i = 0;
+	offset = 0;
+	#define xx(name, value) \
+	{ \
+		cur_len = std::size(value) - 1; \
+		begin = value; \
+		if(i != 0) \
+		{ \
+			strings.m_offsets_buf[i - 1] = offset; \
+		} \
+		std::copy(begin + 0, begin + cur_len, &strings.m_bytes_buf[offset]); \
+		mk_assert(((std::size_t)(offset)) + ((std::size_t)(cur_len)) <= std::numeric_limits<std::uint16_t>::max()); \
+		offset += cur_len; \
+		++i; \
+	}
+	#define x(name, value) xx(name, value)
+	mk_x_nstrings()
+	#undef x
+	#define x(name) xx(name, #name)
+	mk_x_dlls_to_load()
+	#undef x
+	#undef xx
+	return strings;
+}
+
+static constexpr auto const k_strings = mk_strings_make();
 
 struct mk_fw_s
 {
@@ -1794,6 +1923,29 @@ static inline void fw_destroy(mk_fw_t* const fw)
 	return nstr;
 }
 
+[[nodiscard]] static inline mk_view_nstr_t nstr_to_nstr(mk_view_nstr_nz_t const nstr_nz)
+{
+	LPSTR buf;
+	int n;
+	int i;
+	mk_view_nstr_t nstr;
+
+	mk_assert(nstr_nz.m_len < _countof(g_app.m_tmp_nstrs[0]));
+
+	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
+	n = ((int)(nstr_nz.m_len));
+	for(i = 0; i != n; ++i)
+	{
+		buf[i] = ((CHAR)(nstr_nz.m_buf[i]));
+	}
+	buf[i] = '\0';
+	nstr.m_buf = buf;
+	nstr.m_len = nstr_nz.m_len;
+	mk_assert(nstr.m_len >= 0);
+	mk_assert(nstr.m_buf[nstr.m_len] == '\0');
+	return nstr;
+}
+
 template<size_t n>
 [[nodiscard]] static inline mk_view_nstr_t nstr_to_nstr(std::array<char, n> const& arr)
 {
@@ -1817,6 +1969,30 @@ template<size_t n>
 	{
 		buf[i] = ((WCHAR)(nstr.m_buf[i]));
 	}
+	wstr.m_buf = buf;
+	wstr.m_len = nstr.m_len;
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline mk_view_wstr_t nstr_to_wstr(mk_view_nstr_nz_t const& nstr)
+{
+	LPWSTR buf;
+	SIZE_T n;
+	SIZE_T i;
+	mk_view_wstr_t wstr;
+
+	mk_assert(nstr.m_len >= 0);
+	mk_assert(nstr.m_len < _countof(g_app.m_tmp_wstrs[0]));
+
+	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
+	n = nstr.m_len;
+	for(i = 0; i != n; ++i)
+	{
+		buf[i] = ((WCHAR)(nstr.m_buf[i]));
+	}
+	buf[i] = L'\0';
 	wstr.m_buf = buf;
 	wstr.m_len = nstr.m_len;
 	mk_assert(wstr.m_len >= 0);
@@ -1878,7 +2054,7 @@ template<size_t nn>
 	}
 	else
 	{
-		wstr = nstr_to_wstr(k_konst.m_nstrs.empty);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::empty));
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -1930,7 +2106,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	mk_x_kernel_funcs()
 	#undef x
 
-	#define x(name) g_app.m_dlls.m_##name = g_app.m_funcs_kernel.m_pfn_LoadLibraryExA(nstr_to_nstr(k_konst.m_nstrs.##name).m_buf, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32); mk_assert(g_app.m_dlls.m_##name);
+	#define x(name) g_app.m_dlls.m_##name = g_app.m_funcs_kernel.m_pfn_LoadLibraryExA(nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::##name)).m_buf, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32); mk_assert(g_app.m_dlls.m_##name);
 	mk_x_dlls_to_load()
 	#undef x
 
@@ -1998,7 +2174,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	}
 	else
 	{
-		wstr = nstr_to_wstr(k_konst.m_nstrs.none);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::none));
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2031,7 +2207,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	}
 	else
 	{
-		wstr = nstr_to_wstr(k_konst.m_nstrs.empty);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::empty));
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2056,7 +2232,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	}
 	else
 	{
-		wstr = nstr_to_wstr(k_konst.m_nstrs.questions);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::questions));
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2092,7 +2268,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	}
 	else
 	{
-		wstr = nstr_to_wstr(k_konst.m_nstrs.questions);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::questions));
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2110,8 +2286,8 @@ static inline void mkfw_load_all(PPEB const peb)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_u8.data(), k_konst.m_nstrs.fmt_u8.size());
-	fmt[k_konst.m_nstrs.fmt_u8.size()] = '\0';
+	mk_memcpy_c(&fmt[0], k_strings.get_nstr(k_strings.string_id::fmt_u8).m_buf, k_strings.get_nstr(k_strings.string_id::fmt_u8).m_len);
+	fmt[k_strings.get_nstr(k_strings.string_id::fmt_u8).m_len] = '\0';
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, ((int)(u8)), ((int)(u8))); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
 	view.m_len = len;
@@ -2129,8 +2305,8 @@ static inline void mkfw_load_all(PPEB const peb)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_u16.data(), k_konst.m_nstrs.fmt_u16.size());
-	fmt[k_konst.m_nstrs.fmt_u16.size()] = '\0';
+	mk_memcpy_c(&fmt[0], k_strings.get_nstr(k_strings.string_id::fmt_u16).m_buf, k_strings.get_nstr(k_strings.string_id::fmt_u16).m_len);
+	fmt[k_strings.get_nstr(k_strings.string_id::fmt_u16).m_len] = '\0';
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, ((int)(u16)), ((int)(u16))); mk_assert(len >= 1); mk_assert(len < cap);
 	buf[len] = '\0';
 	view.m_buf = buf;
@@ -2151,8 +2327,8 @@ static inline void mkfw_load_all(PPEB const peb)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_u32.data(), k_konst.m_nstrs.fmt_u32.size());
-	fmt[k_konst.m_nstrs.fmt_u32.size()] = '\0';
+	mk_memcpy_c(&fmt[0], k_strings.get_nstr(k_strings.string_id::fmt_u32).m_buf, k_strings.get_nstr(k_strings.string_id::fmt_u32).m_len);
+	fmt[k_strings.get_nstr(k_strings.string_id::fmt_u32).m_len] = '\0';
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, *((unsigned int*)(&u32)), *((unsigned int*)(&u32))); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
 	view.m_len = len;
@@ -2172,8 +2348,8 @@ static inline void mkfw_load_all(PPEB const peb)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_u64.data(), k_konst.m_nstrs.fmt_u64.size());
-	fmt[k_konst.m_nstrs.fmt_u64.size()] = '\0';
+	mk_memcpy_c(&fmt[0], k_strings.get_nstr(k_strings.string_id::fmt_u64).m_buf, k_strings.get_nstr(k_strings.string_id::fmt_u64).m_len);
+	fmt[k_strings.get_nstr(k_strings.string_id::fmt_u64).m_len] = '\0';
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, *((unsigned long long*)(u64)), *((unsigned long long*)(u64))); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
 	view.m_len = len;
@@ -2224,7 +2400,7 @@ static inline void mkfw_load_all(PPEB const peb)
 	else
 	{
 		mk_assert(("todo", false));
-		wstr = nstr_to_wstr(k_konst.m_nstrs.questions);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::questions));
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2263,8 +2439,8 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_arr16.data(), k_konst.m_nstrs.fmt_arr16.size());
-	fmt[k_konst.m_nstrs.fmt_arr16.size()] = '\0';
+	mk_memcpy_c(&fmt[0], k_strings.get_nstr(k_strings.string_id::fmt_arr16).m_buf, k_strings.get_nstr(k_strings.string_id::fmt_arr16).m_len);
+	fmt[k_strings.get_nstr(k_strings.string_id::fmt_arr16).m_len] = '\0';
 	arr16_to_arr8(&arr16->byteArray16[0], &parts[0]);
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]); mk_assert(len >= 1); mk_assert(len < cap);
 	view.m_buf = buf;
@@ -2327,13 +2503,13 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	switch(value->type)
 	{
-		case FWP_EMPTY            : wstr = nstr_to_wstr(k_konst.m_nstrs.empty);                    break;
+		case FWP_EMPTY            : wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::empty));                    break;
 		case FWP_UINT8            : wstr = nstr_to_wstr(value_to_nstr_uint8(value->uint8));       break;
 		case FWP_UINT16           : wstr = nstr_to_wstr(value_to_nstr_uint16(value->uint16));     break;
 		case FWP_UINT32           : wstr = nstr_to_wstr(value_to_nstr_uint32(value->uint32));     break;
 		case FWP_UINT64           : wstr = nstr_to_wstr(value_to_nstr_uint64(value->uint64));     break;
 		case FWP_BYTE_ARRAY16_TYPE: wstr = nstr_to_wstr(value_to_nstr_arr16(value->byteArray16)); break;
-		default                   : wstr = nstr_to_wstr(k_konst.m_nstrs.questions);                mk_assert(("todo", false)); break;
+		default                   : wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::questions));                mk_assert(("todo", false)); break;
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2355,8 +2531,8 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	lo_wstr = value_to_wstr_value(&range->valueLow);
 	hi_wstr = value_to_wstr_value(&range->valueHigh);
-	txt_from = nstr_to_wstr(k_konst.m_nstrs.range_from);
-	txt_to = nstr_to_wstr(k_konst.m_nstrs.range_to);
+	txt_from = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::range_from));
+	txt_to = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::range_to));
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	ptr = buf;
 	ptr = mk_memcpy(ptr, txt_from);
@@ -2387,7 +2563,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 		case FWP_SID                     : wstr = value_to_wstr_sid(value->sid);                         break;
 		case FWP_SECURITY_DESCRIPTOR_TYPE: wstr = value_to_wstr_sd(value->sd);                           break;
 		case FWP_RANGE_TYPE              : wstr = value_to_wstr_range(value->rangeValue);                break;
-		default                          : wstr = nstr_to_wstr(k_konst.m_nstrs.questions);                mk_assert(("todo", false)); break;
+		default                          : wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::questions));                mk_assert(("todo", false)); break;
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2498,7 +2674,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 		}
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(((int)(wstr.m_len))));
-		wstr = nstr_to_wstr(k_konst.m_nstrs.tab);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::tab));
 		mk_assert(len + ((int)(wstr.m_len)) < cap);
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
@@ -2589,8 +2765,8 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 	cap = _countof(g_app.m_tmp_nstrs[0]);
-	mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_ipv4.data(), k_konst.m_nstrs.fmt_ipv4.size());
-	fmt[k_konst.m_nstrs.fmt_ipv4.size()] = '\0';
+	mk_memcpy_c(&fmt[0], k_strings.get_nstr(k_strings.string_id::fmt_ipv4).m_buf, k_strings.get_nstr(k_strings.string_id::fmt_ipv4).m_len);
+	fmt[k_strings.get_nstr(k_strings.string_id::fmt_ipv4).m_len] = '\0';
 	u32_to_arr4(u32, &parts[0]);
 	len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], parts[3]); mk_assert(len >= 1); mk_assert(len < cap);
 	nstr.m_buf = buf;
@@ -2652,8 +2828,8 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_ipv6_mask_32.data(), k_konst.m_nstrs.fmt_ipv6_mask_32.size());
-		fmt[k_konst.m_nstrs.fmt_ipv6_mask_32.size()] = '\0';
+		mk_memcpy_c(&fmt[0], k_strings.get_nstr(k_strings.string_id::fmt_ipv6_mask_32).m_buf, k_strings.get_nstr(k_strings.string_id::fmt_ipv6_mask_32).m_len);
+		fmt[k_strings.get_nstr(k_strings.string_id::fmt_ipv6_mask_32).m_len] = '\0';
 		arr16_to_arr8(&range->rangeValue->valueHigh.byteArray16->byteArray16[0], &parts[0]);
 		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], same_bits); mk_assert(len >= 1); mk_assert(len < cap);
 		nstr.m_buf = buf;
@@ -2664,8 +2840,8 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_ipv6_mask_48.data(), k_konst.m_nstrs.fmt_ipv6_mask_48.size());
-		fmt[k_konst.m_nstrs.fmt_ipv6_mask_48.size()] = '\0';
+		mk_memcpy_c(&fmt[0], k_strings.get_nstr(k_strings.string_id::fmt_ipv6_mask_48).m_buf, k_strings.get_nstr(k_strings.string_id::fmt_ipv6_mask_48).m_len);
+		fmt[k_strings.get_nstr(k_strings.string_id::fmt_ipv6_mask_48).m_len] = '\0';
 		arr16_to_arr8(&range->rangeValue->valueLow.byteArray16->byteArray16[0], &parts[0]);
 		parts[2] &= (((1u << (same_bits - 32)) - 1) << (16 - (same_bits - 32)));
 		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], same_bits); mk_assert(len >= 1); mk_assert(len < cap);
@@ -2677,8 +2853,8 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		fmt = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		mk_memcpy_c(&fmt[0], k_konst.m_nstrs.fmt_ipv6_mask_128.data(), k_konst.m_nstrs.fmt_ipv6_mask_128.size());
-		fmt[k_konst.m_nstrs.fmt_ipv6_mask_128.size()] = '\0';
+		mk_memcpy_c(&fmt[0], k_strings.get_nstr(k_strings.string_id::fmt_ipv6_mask_128).m_buf, k_strings.get_nstr(k_strings.string_id::fmt_ipv6_mask_128).m_len);
+		fmt[k_strings.get_nstr(k_strings.string_id::fmt_ipv6_mask_128).m_len] = '\0';
 		arr16_to_arr8(&range->rangeValue->valueLow.byteArray16->byteArray16[0], &parts[0]);
 		parts[7] &= (((1u << (same_bits - 112)) - 1) << (16 - (same_bits - 112)));
 		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt, parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], same_bits); mk_assert(len >= 1); mk_assert(len < cap);
@@ -2687,7 +2863,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	}
 	else
 	{
-		nstr = nstr_to_nstr(k_konst.m_nstrs.empty);
+		nstr = nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::empty));
 	}
 	mk_assert(nstr.m_len >= 0);
 	mk_assert(nstr.m_buf[nstr.m_len] == '\0');
@@ -2732,10 +2908,10 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	if(false){}
 	else if(same_bits == 0)
 	{
-		nstr = nstr_to_nstr(k_konst.m_nstrs.every_ipv4);
+		nstr = nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::every_ipv4));
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_08);
+		fmt = nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::fmt_ipv4_mask_08));
 		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
 		len = g_app.m_funcs_ntdll.m_pfn__snprintf(buf, cap, fmt.m_buf, parts_c[0], parts_c[1], parts_c[2], parts_c[3], parts_d[0], parts_d[1], parts_d[2], parts_d[3]); mk_assert(len >= 1); mk_assert(len < cap);
@@ -2746,7 +2922,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	{
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_08);
+		fmt = nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::fmt_ipv4_mask_08));
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
 		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
@@ -2768,7 +2944,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	{
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_16);
+		fmt = nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::fmt_ipv4_mask_16));
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
 		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
@@ -2788,7 +2964,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	{
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_24);
+		fmt = nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::fmt_ipv4_mask_24));
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
 		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
@@ -2806,7 +2982,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	{
 		buf = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
 		cap = _countof(g_app.m_tmp_nstrs[0]);
-		fmt = nstr_to_nstr(k_konst.m_nstrs.fmt_ipv4_mask_32);
+		fmt = nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::fmt_ipv4_mask_32));
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_a[0]);
 		u32_to_arr4(range->rangeValue->valueLow .uint32, &parts_c[0]);
 		u32_to_arr4(range->rangeValue->valueHigh.uint32, &parts_d[0]);
@@ -2820,7 +2996,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	}
 	else
 	{
-		nstr = nstr_to_nstr(k_konst.m_nstrs.empty);
+		nstr = nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::empty));
 	}
 	mk_assert(nstr.m_len >= 0);
 	mk_assert(nstr.m_buf[nstr.m_len] == '\0');
@@ -2834,127 +3010,127 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 	mk_assert(filter);
 	mk_assert(condition);
 
-	wstr = nstr_to_wstr(k_konst.m_nstrs.empty);
+	wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::empty));
 	if(false){}
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==   1)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_icmpv4     ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==   2)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_igmp       ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==   6)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_tcp        ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  17)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_udp        ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  41)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_ipv6generic); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  43)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_ipv6route  ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  44)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_ipv6frag   ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  47)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_gre        ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  58)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_icmpv6     ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  59)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_ipv6nonxt  ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  60)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_ipv6opts   ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 112)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_vrrp       ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 113)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_pgm        ); }
-	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 115)){ wstr = nstr_to_wstr(k_konst.m_nstrs.protocol_l2tp       ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==   1)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_icmpv4)     ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==   2)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_igmp)       ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==   6)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_tcp)        ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  17)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_udp)        ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  41)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_ipv6generic)); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  43)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_ipv6route)  ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  44)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_ipv6frag)   ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  47)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_gre)        ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  58)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_icmpv6)     ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  59)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_ipv6nonxt)  ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 ==  60)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_ipv6opts)   ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 112)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_vrrp)       ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 113)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_pgm)        ); }
+	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_PROTOCOL])) && (condition->conditionValue.type == FWP_UINT8) && (condition->conditionValue.uint8 == 115)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::protocol_l2tp)       ); }
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_UINT32)){ wstr = nstr_to_wstr(ip_address_v4_to_nstr(condition->conditionValue.uint32)); }
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_RANGE_TYPE) && (condition->conditionValue.rangeValue->valueLow.type == FWP_BYTE_ARRAY16_TYPE) && (condition->conditionValue.rangeValue->valueHigh.type == FWP_BYTE_ARRAY16_TYPE)){ wstr = nstr_to_wstr(ip_address_v6_range_to_nstr(&condition->conditionValue)); }
 	else if((guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS])) && (condition->conditionValue.type == FWP_RANGE_TYPE) && (condition->conditionValue.rangeValue->valueLow.type == FWP_UINT32) && (condition->conditionValue.rangeValue->valueHigh.type == FWP_UINT32)){ wstr = nstr_to_wstr(ip_address_v4_range_to_nstr(&condition->conditionValue)); }
 
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_packet_too_big         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_packet_too_big         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_packet_too_big         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_packet_too_big         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_packet_too_big         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_packet_too_big         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_packet_too_big         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_packet_too_big         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_destination_unreachable)){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_destination_unreachable); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_destination_unreachable)){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_destination_unreachable); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_destination_unreachable)){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_destination_unreachable); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_destination_unreachable)){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_destination_unreachable); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_source_quench          )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_source_quench          ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_source_quench          )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_source_quench          ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_source_quench          )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_source_quench          ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_source_quench          )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_source_quench          ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_redirect               )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_redirect               ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_redirect               )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_redirect               ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_redirect               )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_redirect               ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_redirect               )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_redirect               ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_echo_request           )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_echo_request           ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_echo_request           )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_echo_request           ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_echo_request           )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_echo_request           ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_echo_request           )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_echo_request           ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_advertisement   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_advertisement   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_advertisement   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_advertisement   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_advertisement   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_advertisement   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_advertisement   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_advertisement   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_solicitation    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_solicitation    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_solicitation    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_solicitation    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_solicitation    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_solicitation    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_solicitation    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_solicitation    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_time_exceeded          )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_time_exceeded          ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_time_exceeded          )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_time_exceeded          ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_time_exceeded          )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_time_exceeded          ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_time_exceeded          )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_time_exceeded          ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_parameter_problem      )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_parameter_problem      ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_parameter_problem      )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_parameter_problem      ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_parameter_problem      )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_parameter_problem      ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_parameter_problem      )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_parameter_problem      ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_timestamp_request      )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_timestamp_request      ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_timestamp_request      )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_timestamp_request      ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_timestamp_request      )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_timestamp_request      ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_timestamp_request      )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_timestamp_request      ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_address_mask_request   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_address_mask_request   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_address_mask_request   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_address_mask_request   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_address_mask_request   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_address_mask_request   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_address_mask_request   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_address_mask_request   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_packet_too_big         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_packet_too_big)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_packet_too_big         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_packet_too_big)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_packet_too_big         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_packet_too_big)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_packet_too_big         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_packet_too_big)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_destination_unreachable)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_destination_unreachable)); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_destination_unreachable)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_destination_unreachable)); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_destination_unreachable)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_destination_unreachable)); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_destination_unreachable)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_destination_unreachable)); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_source_quench          )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_source_quench)          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_source_quench          )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_source_quench)          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_source_quench          )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_source_quench)          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_source_quench          )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_source_quench)          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_redirect               )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_redirect)               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_redirect               )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_redirect)               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_redirect               )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_redirect)               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_redirect               )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_redirect)               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_echo_request           )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_echo_request)           ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_echo_request           )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_echo_request)           ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_echo_request           )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_echo_request)           ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_echo_request           )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_echo_request)           ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_advertisement   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_advertisement)   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_advertisement   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_advertisement)   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_advertisement   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_advertisement)   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_advertisement   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_advertisement)   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_solicitation    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_solicitation)    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_solicitation    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_solicitation)    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_solicitation    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_solicitation)    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_router_solicitation    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_solicitation)    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_time_exceeded          )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_time_exceeded)          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_time_exceeded          )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_time_exceeded)          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_time_exceeded          )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_time_exceeded)          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_time_exceeded          )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_time_exceeded)          ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_parameter_problem      )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_parameter_problem)      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_parameter_problem      )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_parameter_problem)      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_parameter_problem      )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_parameter_problem)      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_parameter_problem      )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_parameter_problem)      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_timestamp_request      )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_timestamp_request)      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_timestamp_request      )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_timestamp_request)      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_timestamp_request      )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_timestamp_request)      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_timestamp_request      )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_timestamp_request)      ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_address_mask_request   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_address_mask_request)   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V4])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_address_mask_request   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_address_mask_request)   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V4  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_address_mask_request   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_address_mask_request)   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V4 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v4_e_address_mask_request   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_address_mask_request)   ); }
 
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_destination_unreachable         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_destination_unreachable         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_destination_unreachable         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_destination_unreachable         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_destination_unreachable         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_destination_unreachable         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_destination_unreachable         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_destination_unreachable         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_packet_too_big                  )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_packet_too_big                  ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_packet_too_big                  )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_packet_too_big                  ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_packet_too_big                  )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_packet_too_big                  ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_packet_too_big                  )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_packet_too_big                  ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_time_exceeded                   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_time_exceeded                   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_time_exceeded                   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_time_exceeded                   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_time_exceeded                   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_time_exceeded                   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_time_exceeded                   )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_time_exceeded                   ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_parameter_problem               )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_parameter_problem               ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_parameter_problem               )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_parameter_problem               ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_parameter_problem               )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_parameter_problem               ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_parameter_problem               )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_parameter_problem               ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_echo_request                    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_echo_request                    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_echo_request                    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_echo_request                    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_echo_request                    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_echo_request                    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_echo_request                    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_echo_request                    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_query        )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_query        ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_query        )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_query        ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_query        )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_query        ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_query        )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_query        ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report       )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_report       ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report       )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_report       ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report       )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_report       ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report       )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_report       ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_done         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_done         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_done         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_done         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_done         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_done         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_done         )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_done         ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_solicitation             )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_solicitation             ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_solicitation             )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_solicitation             ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_solicitation             )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_solicitation             ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_solicitation             )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_solicitation             ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_advertisement            )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_advertisement            ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_advertisement            )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_advertisement            ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_advertisement            )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_advertisement            ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_advertisement            )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_router_advertisement            ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_solicitation )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_neighbor_discovery_solicitation ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_solicitation )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_neighbor_discovery_solicitation ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_solicitation )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_neighbor_discovery_solicitation ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_solicitation )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_neighbor_discovery_solicitation ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_advertisement)){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_neighbor_discovery_advertisement); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_advertisement)){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_neighbor_discovery_advertisement); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_advertisement)){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_neighbor_discovery_advertisement); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_advertisement)){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_neighbor_discovery_advertisement); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_redirect                        )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_redirect                        ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_redirect                        )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_redirect                        ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_redirect                        )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_redirect                        ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_redirect                        )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_redirect                        ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report_v2    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_report_v2    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report_v2    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_report_v2    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report_v2    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_report_v2    ); }
-	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report_v2    )){ wstr = nstr_to_wstr(k_konst.m_nstrs.icmp_multicast_listener_report_v2    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_destination_unreachable         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_destination_unreachable)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_destination_unreachable         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_destination_unreachable)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_destination_unreachable         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_destination_unreachable)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_destination_unreachable         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_destination_unreachable)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_packet_too_big                  )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_packet_too_big)                  ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_packet_too_big                  )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_packet_too_big)                  ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_packet_too_big                  )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_packet_too_big)                  ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_packet_too_big                  )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_packet_too_big)                  ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_time_exceeded                   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_time_exceeded)                   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_time_exceeded                   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_time_exceeded)                   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_time_exceeded                   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_time_exceeded)                   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_time_exceeded                   )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_time_exceeded)                   ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_parameter_problem               )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_parameter_problem)               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_parameter_problem               )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_parameter_problem)               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_parameter_problem               )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_parameter_problem)               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_parameter_problem               )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_parameter_problem)               ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_echo_request                    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_echo_request)                    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_echo_request                    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_echo_request)                    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_echo_request                    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_echo_request)                    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_echo_request                    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_echo_request)                    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_query        )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_query)        ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_query        )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_query)        ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_query        )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_query)        ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_query        )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_query)        ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report       )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_report)       ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report       )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_report)       ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report       )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_report)       ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report       )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_report)       ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_done         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_done)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_done         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_done)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_done         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_done)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_done         )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_done)         ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_solicitation             )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_solicitation)             ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_solicitation             )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_solicitation)             ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_solicitation             )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_solicitation)             ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_solicitation             )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_solicitation)             ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_advertisement            )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_advertisement)            ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_advertisement            )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_advertisement)            ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_advertisement            )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_advertisement)            ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_router_advertisement            )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_router_advertisement)            ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_solicitation )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_neighbor_discovery_solicitation) ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_solicitation )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_neighbor_discovery_solicitation) ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_solicitation )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_neighbor_discovery_solicitation) ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_solicitation )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_neighbor_discovery_solicitation) ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_advertisement)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_neighbor_discovery_advertisement)); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_advertisement)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_neighbor_discovery_advertisement)); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_advertisement)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_neighbor_discovery_advertisement)); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_neighbor_discovery_advertisement)){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_neighbor_discovery_advertisement)); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_redirect                        )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_redirect)                        ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_redirect                        )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_redirect)                        ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_redirect                        )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_redirect)                        ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_redirect                        )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_redirect)                        ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6    ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report_v2    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_report_v2)    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_RECV_ACCEPT_V6])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ORIGINAL_ICMP_TYPE])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report_v2    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_report_v2)    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_INBOUND_ICMP_ERROR_V6  ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report_v2    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_report_v2)    ); }
+	else if((guid_eq(&filter->layerKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_LAYER_OUTBOUND_ICMP_ERROR_V6 ])) && (guid_eq(&condition->fieldKey, &k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_LOCAL_PORT     ])) && (condition->matchType == FWP_MATCH_EQUAL) && (condition->conditionValue.type == FWP_UINT16) && (condition->conditionValue.uint16 == mk_net_icmp_v6_e_multicast_listener_report_v2    )){ wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::icmp_multicast_listener_report_v2)    ); }
 
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -3014,7 +3190,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		}
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(((int)(wstr.m_len))));
-		wstr = nstr_to_wstr(k_konst.m_nstrs.tab);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::tab));
 		mk_assert(len + ((int)(wstr.m_len)) < cap);
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
@@ -3055,7 +3231,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
 		b = g_app.m_funcs_kernel.m_pfn_HeapFree(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, ((LPVOID)(wstr.m_buf))); mk_assert(b);
-		wstr = nstr_to_wstr(k_konst.m_nstrs.nl);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::nl));
 		mk_assert(len + ((int)(wstr.m_len)) < cap);
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
@@ -3096,7 +3272,7 @@ static inline void u32_to_arr4(UINT32 const u32, unsigned char* const arr4)
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
 		b = g_app.m_funcs_kernel.m_pfn_HeapFree(g_app.m_funcs_kernel.m_pfn_GetProcessHeap(), 0, ((LPVOID)(wstr.m_buf))); mk_assert(b);
-		wstr = nstr_to_wstr(k_konst.m_nstrs.nl);
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::nl));
 		mk_assert(len + ((int)(wstr.m_len)) < cap);
 		ptr = mk_memcpy(buf + len, wstr); ((void)(ptr));
 		len += ((int)(wstr.m_len));
@@ -3292,14 +3468,14 @@ static inline void mkfw_wnd_on_key_apps(mk_wnd_t* const self, HWND const list_vi
 	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
 	mi.fType = MFT_STRING;
 	mi.wID = menu_id_e_copy_line;
-	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.menu_copy_line).m_buf));
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::menu_copy_line)).m_buf));
 	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_line, FALSE, &mi); mk_assert(b);
 
 	mi.cbSize = sizeof(mi);
 	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
 	mi.fType = MFT_STRING;
 	mi.wID = menu_id_e_copy_table;
-	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.menu_copy_table).m_buf));
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::menu_copy_table)).m_buf));
 	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_table, FALSE, &mi); mk_assert(b);
 
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(list_view, LVM_GETSELECTEDCOUNT, 0, 0);
@@ -3344,21 +3520,21 @@ static inline void mkfw_wnd_on_rclick(mk_wnd_t* const self, HWND const list_view
 	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
 	mi.fType = MFT_STRING;
 	mi.wID = menu_id_e_copy_cell;
-	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.menu_copy_value).m_buf));
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::menu_copy_value)).m_buf));
 	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_cell, FALSE, &mi); mk_assert(b);
 
 	mi.cbSize = sizeof(mi);
 	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
 	mi.fType = MFT_STRING;
 	mi.wID = menu_id_e_copy_line;
-	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.menu_copy_line).m_buf));
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::menu_copy_line)).m_buf));
 	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_line, FALSE, &mi); mk_assert(b);
 
 	mi.cbSize = sizeof(mi);
 	mi.fMask = MIIM_ID | MIIM_STRING | MIIM_FTYPE;
 	mi.fType = MFT_STRING;
 	mi.wID = menu_id_e_copy_table;
-	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.menu_copy_table).m_buf));
+	mi.dwTypeData = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::menu_copy_table)).m_buf));
 	b = g_app.m_funcs_user.m_pfn_InsertMenuItemW(menu, menu_id_e_copy_table, FALSE, &mi); mk_assert(b);
 
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(list_view, LVM_GETSELECTEDCOUNT, 0, 0);
@@ -3519,40 +3695,40 @@ static inline void mkfw_wnd__proc__create(mk_wnd_t* const self, HWND const hwnd,
 		}
 	}
 
-	self->m_entries = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstrs.wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstrs.empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dlls.m_exe, NULL); mk_assert(self->m_entries);
+	self->m_entries = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::wnd_cls_name_list_view)).m_buf, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::empty)).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dlls.m_exe, NULL); mk_assert(self->m_entries);
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP); ((void)(lr));
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.filter).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::filter)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_filter, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_filter);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.name).m_buf)); col.cx = 300;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::name)).m_buf)); col.cx = 300;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_name, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_name);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.description).m_buf)); col.cx = 180;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::description)).m_buf)); col.cx = 180;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_description, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_description);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.provider).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::provider)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_provider, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_provider);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.layer).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::layer)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_layer, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_layer);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.sublayer).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::sublayer)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_sub_layer, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_sub_layer);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.action).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::action)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_action, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_action);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.filter_type_callout).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::filter_type_callout)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_callout, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_callout);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.filter_id).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::filter_id)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_id, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_id);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.weight).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::weight)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_weight, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_weight);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.effective_weight).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::effective_weight)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_INSERTCOLUMN, mk_col_id_entry_e_effective_weight, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_entry_e_effective_weight);
 
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETITEMCOUNT, self->m_fw->m_count, LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL); mk_assert(lr != 0);
@@ -3562,22 +3738,22 @@ static inline void mkfw_wnd__proc__create(mk_wnd_t* const self, HWND const hwnd,
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_col_id_entry_e_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_entries, LVM_SETCOLUMNWIDTH, mk_col_id_entry_e_sub_layer, LVSCW_AUTOSIZE); mk_assert(lr != 0);
 
-	self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_konst.m_nstrs.wnd_cls_name_list_view).m_buf, nstr_to_wstr(k_konst.m_nstrs.empty).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dlls.m_exe, NULL); mk_assert(self->m_entries);
+	self->m_conditions = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::wnd_cls_name_list_view)).m_buf, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::empty)).m_buf, WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL | LVS_SHOWSELALWAYS, 10, 10, 800, 600, self->m_hwnd, NULL, g_app.m_dlls.m_exe, NULL); mk_assert(self->m_entries);
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP); ((void)(lr));
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.field).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::field)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_field, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_field);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.match_type).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::match_type)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_match_type, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_match_type);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.type).m_buf)); col.cx = 80;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::type)).m_buf)); col.cx = 80;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_value_type, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_value_type);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.value).m_buf)); col.cx = 200;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::value)).m_buf)); col.cx = 200;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_value_data, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_value_data);
 
-	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_konst.m_nstrs.note).m_buf)); col.cx = 200;
+	col.mask = LVCF_WIDTH | LVCF_TEXT; col.pszText = ((LPWSTR)(nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::note)).m_buf)); col.cx = 200;
 	lr = g_app.m_funcs_user.m_pfn_SendMessageW(self->m_conditions, LVM_INSERTCOLUMN, mk_col_id_condition_e_note, ((LPARAM)(&col))); mk_assert(lr == mk_col_id_condition_e_note);
 
 	mk_col_id_entry_sort_collapse(mk_col_id_entry_e_name, true, &self->m_entries_sort_col);
@@ -3800,7 +3976,7 @@ static inline void mkfw_wnd_delete_selected_entry(mk_wnd_t* const self, LPDWORD 
 	mk_view_wstr_t wstr;
 
 	name = entry_to_wstr(self->m_fw->m_entries[self->m_entry_idx_sorted], mk_col_id_entry_e_filter);
-	fmt = nstr_to_wstr(k_konst.m_nstrs.delete_fmt);
+	fmt = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::delete_fmt));
 	buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	cap = _countof(g_app.m_tmp_wstrs[0]);
 	len = g_app.m_funcs_ntdll.m_pfn_swprintf(buf, fmt.m_buf, name.m_buf); mk_assert(len >= 1); mk_assert(len < cap);
@@ -3943,8 +4119,8 @@ static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int
 
 	name_ipv4 = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc_ipv4 = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name_ipv4, nstr_to_wstr(k_konst.m_nstrs.fmt_block_ipv4_name).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc_ipv4, nstr_to_wstr(k_konst.m_nstrs.fmt_block_ipv4_desc).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name_ipv4, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::fmt_block_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc_ipv4, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::fmt_block_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
 	filter_ipv4.displayData.name = name_ipv4;
 	filter_ipv4.displayData.description = desc_ipv4;
 	filter_ipv4.providerKey = ((GUID*)(&k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_PROVIDER_MPSSVC_WF]));
@@ -4006,8 +4182,8 @@ static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int
 
 	name_ipv6 = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc_ipv6 = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name_ipv6, nstr_to_wstr(k_konst.m_nstrs.fmt_block_ipv6_name).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc_ipv6, nstr_to_wstr(k_konst.m_nstrs.fmt_block_ipv6_desc).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name_ipv6, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::fmt_block_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc_ipv6, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::fmt_block_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
 	filter_ipv6.displayData.name = name_ipv6;
 	filter_ipv6.displayData.description = desc_ipv6;
 	filter_ipv6.providerKey = ((GUID*)(&k_konst.m_guids.m_guids.m_guids[guid_id_e_FWPM_PROVIDER_MPSSVC_WF]));
@@ -4047,10 +4223,10 @@ static inline void mkfw_wnd_insert(mk_wnd_t* const self)
 	mk_memclr_c(&name, sizeof(name));
 	name.lStructSize = sizeof(name);
 	name.hwndOwner = self->m_hwnd;
-	name.lpstrFilter = nstr_to_wstr(k_konst.m_nstrs.open_filter).m_buf;
+	name.lpstrFilter = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::open_filter)).m_buf;
 	name.lpstrFile = path_buf;
 	name.nMaxFile = path_cap;
-	name.lpstrTitle = nstr_to_wstr(k_konst.m_nstrs.open_title).m_buf;
+	name.lpstrTitle = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::open_title)).m_buf;
 	name.Flags = OFN_HIDEREADONLY | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER | OFN_ENABLESIZING;
 	b = g_app.m_funcs_comdlg.m_pfn_GetOpenFileNameW(&name);
 	if(b && name.lpstrFile && name.lpstrFile[0] != L'\0')
@@ -4060,7 +4236,7 @@ static inline void mkfw_wnd_insert(mk_wnd_t* const self)
 		mkfw_wnd_refresh(self);
 		if(success)
 		{
-			res = g_app.m_funcs_user.m_pfn_MessageBoxW(self->m_hwnd, nstr_to_wstr(k_konst.m_nstrs.block_added).m_buf, nstr_to_wstr(k_konst.m_nstrs.fire_wall).m_buf, MB_OK | MB_ICONINFORMATION); ((void)(res));
+			res = g_app.m_funcs_user.m_pfn_MessageBoxW(self->m_hwnd, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::block_added)).m_buf, nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::fire_wall)).m_buf, MB_OK | MB_ICONINFORMATION); ((void)(res));
 		}
 	}
 }
@@ -4090,15 +4266,15 @@ static inline void mkfw_wnd_proc__notify_entries___keydown_del(mk_wnd_t* const s
 	mk_view_wstr_t ok_caption;
 
 	question_text = mkfw_wnd_get_del_question(self);
-	question_caption = nstr_to_wstr(k_konst.m_nstrs.delete_caption);
+	question_caption = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::delete_caption));
 	res = g_app.m_funcs_user.m_pfn_MessageBoxW(self->m_hwnd, question_text.m_buf, question_caption.m_buf, MB_YESNO | MB_DEFBUTTON2 | MB_ICONQUESTION);
 	if(res == IDYES)
 	{
 		mkfw_wnd_delete_selected_entry(self, &dw);
 		if(dw == ERROR_SUCCESS)
 		{
-			ok_text = nstr_to_wstr(k_konst.m_nstrs.delete_ok_text);
-			ok_caption = nstr_to_wstr(k_konst.m_nstrs.delete_ok_caption);
+			ok_text = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::delete_ok_text));
+			ok_caption = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::delete_ok_caption));
 			res = g_app.m_funcs_user.m_pfn_MessageBoxW(self->m_hwnd, ok_text.m_buf, ok_caption.m_buf, MB_OK | MB_ICONINFORMATION); ((void)(res));
 			mkfw_wnd_refresh(self);
 		}
@@ -4167,7 +4343,7 @@ static inline void mkfw_wnd_proc__notify_conditions__getdispinfow_text(mk_wnd_t*
 	mk_assert(self->m_fw);
 	mk_assert(self->m_fw->m_entries);
 	disp_info = ((LPNMLVDISPINFOW)(lparam)); mk_assert(disp_info);
-	wstr = nstr_to_wstr(k_konst.m_nstrs.questions);
+	wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::questions));
 	disp_info->item.pszText = ((LPWSTR)(wstr.m_buf));
 	mk_assert(disp_info->item.pszText);
 	item_idx = self->m_entry_idx_sorted;
@@ -4463,11 +4639,11 @@ extern "C" DWORD __stdcall mk_entry(PPEB const peb)
 	wnd_cls_info.hCursor = g_app.m_funcs_user.m_pfn_LoadCursorW(NULL, IDC_ARROW);
 	wnd_cls_info.hbrBackground = ((HBRUSH)(COLOR_APPWORKSPACE + 1));
 	wnd_cls_info.lpszMenuName = NULL;
-	wnd_cls_info.lpszClassName = nstr_to_wstr(k_konst.m_nstrs.mkfw).m_buf;
+	wnd_cls_info.lpszClassName = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::mkfw)).m_buf;
 	wnd_cls_info.hIconSm = g_app.m_funcs_user.m_pfn_LoadIconW(NULL, IDI_APPLICATION);
 	wnd_cls_atom = g_app.m_funcs_user.m_pfn_RegisterClassExW(&wnd_cls_info); mk_assert(wnd_cls_atom);
 	g_app.m_fw_wnd.m_fw = &g_app.m_fw;
-	hwnd = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_APPWINDOW, ((LPCWSTR)(wnd_cls_atom)), nstr_to_wstr(k_konst.m_nstrs.fire_wall).m_buf, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, g_app.m_dlls.m_exe, &g_app.m_fw_wnd); mk_assert(hwnd);
+	hwnd = g_app.m_funcs_user.m_pfn_CreateWindowExW(WS_EX_APPWINDOW, ((LPCWSTR)(wnd_cls_atom)), nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::fire_wall)).m_buf, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, g_app.m_dlls.m_exe, &g_app.m_fw_wnd); mk_assert(hwnd);
 	b = g_app.m_funcs_user.m_pfn_ShowWindow(hwnd, SW_SHOWDEFAULT); ((void)(b));
 	for(;;)
 	{
