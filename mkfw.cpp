@@ -1236,54 +1236,7 @@ typedef struct mk_guids_s mk_guids_t;
 	return cnt;
 }
 
-[[nodiscard]] constexpr static inline int matches_get_texts_len(void)
-{
-	int total;
-	int len;
-
-	total = 0;
-
-	#define x(enm, txt) \
-		len = _countof(txt) - 1; \
-		total += len;
-	mk_x_matches()
-	#undef x
-
-	return total;
-}
-
 enum matches_get_count_e { matches_get_count_v = matches_get_count() };
-enum matches_get_texts_len_e { matches_get_texts_len_v = matches_get_texts_len() };
-
-struct matches_texts_s
-{
-	signed short int m_offs[matches_get_count_v + 1];
-	char m_txt_buf[matches_get_texts_len_v];
-};
-typedef struct matches_texts_s matches_texts_t;
-
-[[nodiscard]] constexpr static inline matches_texts_t matches_get_texts(void)
-{
-	int i;
-	matches_texts_t texts;
-	int len;
-
-	i = 0;
-	texts.m_offs[0] = 0;
-
-	#define x(enm, txt) \
-		len = _countof(txt) - 1; \
-		mk_assert(len >= 1); \
-		mk_assert(len <= SHORT_MAX / 4); \
-		mk_assert(texts.m_offs[i] <= SHORT_MAX - len); \
-		texts.m_offs[i + 1] = texts.m_offs[i] + len; \
-		std::copy(&txt[0], &txt[0] + len, &texts.m_txt_buf[0] + texts.m_offs[i]); \
-		++i;
-	mk_x_matches()
-	#undef x
-
-	return texts;
-}
 
 [[nodiscard]] static inline bool types_test(void)
 {
@@ -1448,7 +1401,6 @@ struct mk_konst_s
 	#undef x
 
 	mk_guids_t m_guids;
-	matches_texts_t m_matches;
 	types_texts_t m_types;
 	action_types_texts_t m_action_types;
 };
@@ -1470,7 +1422,6 @@ typedef struct mk_konst_s mk_konst_t;
 	#undef x
 
 	konst.m_guids = mk_guids_get_all();
-	konst.m_matches = matches_get_texts();
 	konst.m_types = types_get_texts();
 	konst.m_action_types = action_types_get_texts();
 	return konst;
@@ -1495,6 +1446,9 @@ public:
 		#undef x
 		#define x(d1, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8, name) xx(name, #name)
 		mk_x_guids()
+		#undef x
+		#define x(name, value) xx(name, value)
+		mk_x_matches()
 		#undef x
 		#undef xx
 	};
@@ -1572,6 +1526,9 @@ public:
 	#define x(d1, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8, name) xx(name, #name)
 	mk_x_guids()
 	#undef x
+	#define x(name, value) xx(name, value)
+	mk_x_matches()
+	#undef x
 	#undef xx
 	return i;
 }
@@ -1590,6 +1547,9 @@ public:
 	#undef x
 	#define x(d1, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8, name) xx(name, #name)
 	mk_x_guids()
+	#undef x
+	#define x(name, value) xx(name, value)
+	mk_x_matches()
 	#undef x
 	#undef xx
 	return i;
@@ -1626,6 +1586,9 @@ public:
 	#undef x
 	#define x(d1, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8, name) xx(name, #name)
 	mk_x_guids()
+	#undef x
+	#define x(name, value) xx(name, value)
+	mk_x_matches()
 	#undef x
 	#undef xx
 	return strings;
@@ -2169,31 +2132,6 @@ static inline void mkfw_load_all(PPEB const peb)
 	return wstr;
 }
 
-[[nodiscard]] static inline mk_view_wstr_t match_type_to_text(FWP_MATCH_TYPE const match_type)
-{
-	int offa;
-	int offb;
-	int len;
-	LPCSTR nstr;
-	mk_view_wstr_t wstr;
-
-	if(((int)(match_type)) >= 0 && ((int)(match_type)) < ((int)(matches_get_count_v)))
-	{
-		offa = k_konst.m_matches.m_offs[((int)(match_type)) + 0];
-		offb = k_konst.m_matches.m_offs[((int)(match_type)) + 1];
-		len = offb - offa;
-		nstr = &k_konst.m_matches.m_txt_buf[0] + offa;
-		wstr = nstr_to_wstr(nstr, len);
-	}
-	else
-	{
-		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::id_questions));
-	}
-	mk_assert(wstr.m_len >= 0);
-	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
-	return wstr;
-}
-
 [[nodiscard]] static inline mk_view_wstr_t type_to_text(FWP_DATA_TYPE const type)
 {
 	int idx;
@@ -2458,13 +2396,13 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 
 	switch(value->type)
 	{
-		case FWP_EMPTY            : wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::id_empty));                    break;
-		case FWP_UINT8            : wstr = nstr_to_wstr(value_to_nstr_uint8(value->uint8));       break;
-		case FWP_UINT16           : wstr = nstr_to_wstr(value_to_nstr_uint16(value->uint16));     break;
-		case FWP_UINT32           : wstr = nstr_to_wstr(value_to_nstr_uint32(value->uint32));     break;
-		case FWP_UINT64           : wstr = nstr_to_wstr(value_to_nstr_uint64(value->uint64));     break;
-		case FWP_BYTE_ARRAY16_TYPE: wstr = nstr_to_wstr(value_to_nstr_arr16(value->byteArray16)); break;
-		default                   : wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::id_questions));                mk_assert(("todo", false)); break;
+		case FWP_EMPTY            : wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::id_empty)); break;
+		case FWP_UINT8            : wstr = nstr_to_wstr(value_to_nstr_uint8(value->uint8));                 break;
+		case FWP_UINT16           : wstr = nstr_to_wstr(value_to_nstr_uint16(value->uint16));               break;
+		case FWP_UINT32           : wstr = nstr_to_wstr(value_to_nstr_uint32(value->uint32));               break;
+		case FWP_UINT64           : wstr = nstr_to_wstr(value_to_nstr_uint64(value->uint64));               break;
+		case FWP_BYTE_ARRAY16_TYPE: wstr = nstr_to_wstr(value_to_nstr_arr16(value->byteArray16));           break;
+		default                   : wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::id_questions)); mk_assert(("todo", false)); break;
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2518,7 +2456,26 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 		case FWP_SID                     : wstr = value_to_wstr_sid(value->sid);                         break;
 		case FWP_SECURITY_DESCRIPTOR_TYPE: wstr = value_to_wstr_sd(value->sd);                           break;
 		case FWP_RANGE_TYPE              : wstr = value_to_wstr_range(value->rangeValue);                break;
-		default                          : wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::id_questions));                mk_assert(("todo", false)); break;
+		default                          : wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::id_questions)); mk_assert(("todo", false)); break;
+	}
+	mk_assert(wstr.m_len >= 0);
+	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
+	return wstr;
+}
+
+[[nodiscard]] static inline mk_view_wstr_t mk_match_type_to_wstr(FWP_MATCH_TYPE const match_type)
+{
+	int idx;
+	mk_view_wstr_t wstr;
+
+	idx = ((int)(match_type));
+	if(idx >= 0 && idx < matches_get_count_v)
+	{
+		wstr = nstr_to_wstr(k_strings.get_nstr(k_strings.string_id::id_FWP_MATCH_EQUAL + idx));
+	}
+	else
+	{
+		wstr = nstr_to_wstr(value_to_nstr_uint8(((UINT8)(match_type))));
 	}
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
@@ -2662,7 +2619,7 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 	mk_assert(filter);
 	mk_assert(condition);
 
-	wstr = match_type_to_text(condition->matchType);
+	wstr = mk_match_type_to_wstr(condition->matchType);
 	mk_assert(wstr.m_len >= 0);
 	mk_assert(wstr.m_buf[wstr.m_len] == L'\0');
 	return wstr;
