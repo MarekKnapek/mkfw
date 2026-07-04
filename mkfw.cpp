@@ -728,14 +728,14 @@ int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(FWP_RANGE_TYPE                   , "FWP_RANGE_TYPE"                   ) \
 
 #define mk_x_action_types() \
-	x(FWP_ACTION_BLOCK              , "FWP_ACTION_BLOCK"              ) \
-	x(FWP_ACTION_CALLOUT_INSPECTION , "FWP_ACTION_CALLOUT_INSPECTION" ) \
-	x(FWP_ACTION_CALLOUT_TERMINATING, "FWP_ACTION_CALLOUT_TERMINATING") \
-	x(FWP_ACTION_CALLOUT_UNKNOWN    , "FWP_ACTION_CALLOUT_UNKNOWN"    ) \
-	x(FWP_ACTION_CONTINUE           , "FWP_ACTION_CONTINUE"           ) \
-	x(FWP_ACTION_NONE               , "FWP_ACTION_NONE"               ) \
-	x(FWP_ACTION_NONE_NO_MATCH      , "FWP_ACTION_NONE_NO_MATCH"      ) \
-	x(FWP_ACTION_PERMIT             , "FWP_ACTION_PERMIT"             ) \
+	x(FWP_ACTION_BLOCK_              , FWP_ACTION_BLOCK              , "FWP_ACTION_BLOCK"              ) \
+	x(FWP_ACTION_CALLOUT_INSPECTION_ , FWP_ACTION_CALLOUT_INSPECTION , "FWP_ACTION_CALLOUT_INSPECTION" ) \
+	x(FWP_ACTION_CALLOUT_TERMINATING_, FWP_ACTION_CALLOUT_TERMINATING, "FWP_ACTION_CALLOUT_TERMINATING") \
+	x(FWP_ACTION_CALLOUT_UNKNOWN_    , FWP_ACTION_CALLOUT_UNKNOWN    , "FWP_ACTION_CALLOUT_UNKNOWN"    ) \
+	x(FWP_ACTION_CONTINUE_           , FWP_ACTION_CONTINUE           , "FWP_ACTION_CONTINUE"           ) \
+	x(FWP_ACTION_NONE_               , FWP_ACTION_NONE               , "FWP_ACTION_NONE"               ) \
+	x(FWP_ACTION_NONE_NO_MATCH_      , FWP_ACTION_NONE_NO_MATCH      , "FWP_ACTION_NONE_NO_MATCH"      ) \
+	x(FWP_ACTION_PERMIT_             , FWP_ACTION_PERMIT             , "FWP_ACTION_PERMIT"             ) \
 
 enum mk_net_icmp_v4_e
 {
@@ -1323,7 +1323,7 @@ typedef struct types_texts_s types_texts_t;
 
 	cnt = 0;
 
-	#define x(name, str) \
+	#define x(name, value, str) \
 		++cnt;
 	mk_x_action_types()
 	#undef x
@@ -1338,7 +1338,7 @@ typedef struct types_texts_s types_texts_t;
 
 	total = 0;
 
-	#define x(name, str) \
+	#define x(name, value, str) \
 		len = _countof(str) - 1; \
 		total += len;
 	mk_x_action_types()
@@ -1348,37 +1348,6 @@ typedef struct types_texts_s types_texts_t;
 }
 
 enum action_types_get_count_e { action_types_get_count_v = action_types_get_count() };
-enum action_types_get_texts_len_e { action_types_get_texts_len_v = action_types_get_texts_len() };
-
-struct action_types_texts_s
-{
-	signed short int m_offs[action_types_get_count_v + 1];
-	char m_txt_buf[action_types_get_texts_len_v];
-};
-typedef struct action_types_texts_s action_types_texts_t;
-
-[[nodiscard]] constexpr static inline action_types_texts_t action_types_get_texts(void)
-{
-	int i;
-	action_types_texts_t texts;
-	int len;
-
-	i = 0;
-	texts.m_offs[0] = 0;
-
-	#define x(name, str) \
-		len = _countof(str) - 1; \
-		mk_assert(len >= 1); \
-		mk_assert(len <= SHORT_MAX / 4); \
-		mk_assert(texts.m_offs[i] <= SHORT_MAX - len); \
-		texts.m_offs[i + 1] = texts.m_offs[i] + len; \
-		std::copy(&str[0], &str[0] + len, &texts.m_txt_buf[0] + texts.m_offs[i]); \
-		++i;
-	mk_x_action_types()
-	#undef x
-
-	return texts;
-}
 
 #define x(name) typedef decltype(&name) tfn_##name;
 mk_x_all_funcs()
@@ -1402,7 +1371,6 @@ struct mk_konst_s
 
 	mk_guids_t m_guids;
 	types_texts_t m_types;
-	action_types_texts_t m_action_types;
 };
 typedef struct mk_konst_s mk_konst_t;
 
@@ -1423,7 +1391,6 @@ typedef struct mk_konst_s mk_konst_t;
 
 	konst.m_guids = mk_guids_get_all();
 	konst.m_types = types_get_texts();
-	konst.m_action_types = action_types_get_texts();
 	return konst;
 }
 
@@ -1449,6 +1416,9 @@ public:
 		#undef x
 		#define x(name, value) xx(name, value)
 		mk_x_matches()
+		#undef x
+		#define x(name, value, str) xx(name, str)
+		mk_x_action_types()
 		#undef x
 		#undef xx
 	};
@@ -1479,7 +1449,7 @@ public:
 
 		if(id == 0)
 		{
-			str_len = m_offsets_buf[1];
+			str_len = m_offsets_buf[0];
 		}
 		else if(id == s_strings_cnt - 1)
 		{
@@ -1529,6 +1499,9 @@ public:
 	#define x(name, value) xx(name, value)
 	mk_x_matches()
 	#undef x
+	#define x(name, value, str) xx(name, str)
+	mk_x_action_types()
+	#undef x
 	#undef xx
 	return i;
 }
@@ -1550,6 +1523,9 @@ public:
 	#undef x
 	#define x(name, value) xx(name, value)
 	mk_x_matches()
+	#undef x
+	#define x(name, value, str) xx(name, str)
+	mk_x_action_types()
 	#undef x
 	#undef xx
 	return i;
@@ -1589,6 +1565,9 @@ public:
 	#undef x
 	#define x(name, value) xx(name, value)
 	mk_x_matches()
+	#undef x
+	#define x(name, value, str) xx(name, str)
+	mk_x_action_types()
 	#undef x
 	#undef xx
 	return strings;
@@ -2486,34 +2465,20 @@ static inline void arr16_to_arr8(UINT8 const* const arr16, USHORT* const arr8)
 {
 	int idx;
 	int i;
-	int offa;
-	int offb;
-	int len;
-	char const* bufa;
-	char* bufb;
 	mk_view_nstr_t nstr;
 
 	idx = -1;
 	i = 0;
-
-	#define x(name, str) \
-		if(action_type == name){ idx = i; } \
-		++i;
+	#define x(name, value, str) \
+	{ \
+		if(action_type == value){ idx = i; } \
+		++i; \
+	}
 	mk_x_action_types()
 	#undef x
-
 	if(idx != -1)
 	{
-		offa = k_konst.m_action_types.m_offs[idx + 0];
-		offb = k_konst.m_action_types.m_offs[idx + 1];
-		len = offb - offa;
-		mk_assert(len < _countof(g_app.m_tmp_nstrs[0]));
-		bufa = &k_konst.m_action_types.m_txt_buf[offa];
-		bufb = &g_app.m_tmp_nstrs[g_app.m_tmps_nstr_idx++ % _countof(g_app.m_tmp_nstrs)][0];
-		mk_memcpy_c(bufb, bufa, len);
-		bufb[len] = '\0';
-		nstr.m_buf = bufb;
-		nstr.m_len = len;
+		nstr = nstr_to_nstr(k_strings.get_nstr(k_strings.string_id::id_FWP_ACTION_BLOCK_ + idx));
 	}
 	else
 	{
