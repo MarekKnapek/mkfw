@@ -18,6 +18,7 @@
 #define mk_arch_is_i386 1
 #define mk_arch_is_amd64 0
 #endif
+#define m_arch_bits (mk_arch_is_i386 ? 32 : (mk_arch_is_amd64 ? 64 : -1))
 
 #if mk_arch_is_i386
 #define m_pfn_GetWindowLongPtrW m_pfn_GetWindowLongW
@@ -41,91 +42,109 @@ void mk_msg(char const* const msg){ MessageBoxA(NULL, msg, "Assert!", MB_ICONERR
 #define my_MessageBoxA(parent, msg, title, icon)
 #endif
 
-// fnv1a begin
-
-struct fnv1a_state
+template<std::size_t t_bits>
+class fnv1a_base_t
 {
-	DWORD m_sum;
 };
 
-constexpr static inline void fnv1a_init(fnv1a_state& state)
+template<>
+class fnv1a_base_t<32>
 {
-	state.m_sum = 0x811c9dc5;
-}
+public:
+	typedef std::uint32_t base_type;
+	static constexpr std::uint32_t const k_offset = 0x811c9dc5;
+	static constexpr std::uint32_t const k_prime  = 0x01000193;
+};
 
-constexpr static inline void fnv1a_append(fnv1a_state& state, BYTE const& val)
+template<>
+class fnv1a_base_t<64>
 {
-	state.m_sum ^= ((DWORD)(val));
-	state.m_sum *= 0x01000193;
-}
+public:
+	typedef std::uint64_t base_type;
+	static constexpr std::uint64_t const k_offset = 0x14650fb0739d0383ull;
+	static constexpr std::uint64_t const k_prime  = 0x00000100000001b3ull;
+};
 
-constexpr static inline void fnv1a_append(fnv1a_state& state, CHAR const& val)
+template<std::size_t t_bits = m_arch_bits>
+class fnv1a_t : private fnv1a_base_t<t_bits>
 {
-	fnv1a_append(state, ((BYTE)(val)));
-}
-
-constexpr static inline void fnv1a_append(fnv1a_state& state, LPCCH const& str, DWORD const& len)
-{
-	DWORD n;
-	DWORD i;
-
-	n = len;
-	for(i = 0; i != n; ++i)
+private:
+	typedef fnv1a_base_t<t_bits> base_t;
+public:
+	constexpr fnv1a_t(void) noexcept :
+		m_state(base_t::k_offset)
 	{
-		fnv1a_append(state, str[i]);
 	}
-}
+	constexpr void append(unsigned char const& val) noexcept
+	{
+		m_state ^= ((base_t::base_type)(val));
+		m_state *= base_t::k_prime;
+	}
+	constexpr void append(char const& val) noexcept
+	{
+		append(((unsigned char)(val)));
+	}
+	constexpr void append(LPCCH const& str, DWORD const& len) noexcept
+	{
+		DWORD n;
+		DWORD i;
 
-constexpr static inline DWORD fnv1a_finish(fnv1a_state const& state)
-{
-	return state.m_sum;
-}
+		n = len;
+		for(i = 0; i != n; ++i)
+		{
+			append(str[i]);
+		}
+	}
+	[[nodiscard]] constexpr base_t::base_type finish(void) noexcept
+	{
+		return m_state;
+	}
+private:
+	base_t::base_type m_state;
+};
 
 constexpr static inline DWORD fnv1a(LPCCH const& str, DWORD const& len)
 {
-	fnv1a_state hasher;
+	fnv1a_t<32> hasher;
 
-	fnv1a_init(hasher);
-	fnv1a_append(hasher, str, len);
-	return fnv1a_finish(hasher);
+	hasher.append(str, len);
+	return hasher.finish();
 }
 
 constexpr static inline DWORD fnv1alcdll(LPCSTR const& str, DWORD const& len)
 {
-	fnv1a_state hasher;
+	fnv1a_t<32> hasher;
 	DWORD n;
 	DWORD i;
 	UCHAR uchar;
 
-	fnv1a_init(hasher);
 	n = len;
 	for(i = 0; i != n; ++i)
 	{
 		uchar = (str[i] >= 'A' && str[i] <= 'Z') ? ((UCHAR)(str[i] + ('a' - 'A'))) : ((UCHAR)(str[i]));
-		fnv1a_append(hasher, uchar);
+		hasher.append(uchar);
 	}
-	fnv1a_append(hasher, '.');
-	fnv1a_append(hasher, 'd');
-	fnv1a_append(hasher, 'l');
-	fnv1a_append(hasher, 'l');
-	return fnv1a_finish(hasher);
+	hasher.append('.');
+	hasher.append('d');
+	hasher.append('l');
+	hasher.append('l');
+	return hasher.finish();
 }
 
 constexpr static inline DWORD fnv1a(PWCHAR const& str, DWORD const& len)
 {
-	fnv1a_state hasher;
+	fnv1a_t<32> hasher;
 	DWORD n;
 	DWORD i;
 	UCHAR uchar;
 
-	fnv1a_init(hasher);
 	n = len;
 	for(i = 0; i != n; ++i)
 	{
 		uchar = (str[i] >= L'A' && str[i] <= L'Z') ? ((UCHAR)(str[i] + (L'a' - L'A'))) : ((UCHAR)(str[i]));
-		fnv1a_append(hasher, uchar);
+		hasher.append(uchar);
 	}
-	return fnv1a_finish(hasher);
+	return hasher.finish();
 }
 
 static inline DWORD fnv1a(LPCVOID const& str, DWORD const& len)
@@ -140,15 +159,14 @@ template<>
 constexpr static inline DWORD fnv1a<LPCCH>(LPCCH const& str)
 {
 	LPCCH txt;
-	fnv1a_state hasher;
+	fnv1a_t<32> hasher;
 
 	txt = str;
-	fnv1a_init(hasher);
 	while(*txt)
 	{
-		fnv1a_append(hasher, *txt++);
+		hasher.append(*txt++);
 	}
-	return fnv1a_finish(hasher);
+	return hasher.finish();
 }
 
 template<DWORD N>
@@ -156,8 +174,6 @@ constexpr static inline DWORD fnv1a(CHAR const(&str)[N]) noexcept
 {
 	return fnv1a(str, N - 1);
 }
-
-// fnv1a end
 
 template<typename t, size_t n>
 constexpr static inline auto make_zstr(t const(&name)[n])
