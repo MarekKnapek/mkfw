@@ -175,17 +175,6 @@ constexpr static inline DWORD fnv1a(CHAR const(&str)[N]) noexcept
 	return fnv1a(str, N - 1);
 }
 
-template<typename t, size_t n>
-constexpr static inline auto make_zstr(t const(&name)[n])
-{
-	std::array<t, n - 1> arr;
-
-	mk_assert(name[n - 1] == '\0');
-
-	std::copy(name, name + arr.size(), arr.data());
-	return arr;
-}
-
 static inline HMODULE find_module(PPEB const& peb, DWORD const& k_hash)
 {
 	HMODULE mod;
@@ -633,10 +622,6 @@ int __cdecl mk_fn_swprintf(wchar_t*, wchar_t const*, ...);
 	x(filter_type_callout, "Filter Type / Callout") \
 	x(fire_wall, "FireWall") \
 	x(fmt_arr16, "[%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x]") \
-	x(fmt_block_ipv4_desc, "zzz Block IPv4 %s.") \
-	x(fmt_block_ipv4_name, "zzz Block IPv4 %s.") \
-	x(fmt_block_ipv6_desc, "zzz Block IPv6 %s.") \
-	x(fmt_block_ipv6_name, "zzz Block IPv6 %s.") \
 	x(fmt_block_inbound_ipv4_desc, "zzz Block %s incomming IPv4.") \
 	x(fmt_block_inbound_ipv4_name, "zzz Block %s incomming IPv4.") \
 	x(fmt_block_inbound_ipv6_desc, "zzz Block %s incomming IPv6.") \
@@ -4618,174 +4603,6 @@ static inline void mkfw_block_exe_all(mk_fw_t* const fw, LPCWSTR const path_buf,
 	mkfw_block_exe_outbound_ipv4_connect_block(fw, path_buf, path_len, &success); if(!success){ return; }
 	mkfw_block_exe_outbound_ipv6_connect_block(fw, path_buf, path_len, &success); if(!success){ return; }
 
-	st = g_app.m_funcs_fw.m_pfn_FwpmTransactionCommit0(fw->m_eng); if(st != ERROR_SUCCESS){ return; }
-	success = true;
-}
-
-static inline void mkfw_block_exe(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
-{
-	bool success;
-	SECURITY_ATTRIBUTES sa;
-	HANDLE hfile;
-	LPWSTR nt_path_buf;
-	int nt_path_cap;
-	DWORD nt_path_len;
-	LPCWSTR exe_name;
-	FWPM_FILTER0 filter_ipv4;
-	FWPM_FILTER0 filter_ipv6;
-	FWPM_FILTER_CONDITION0 conditions_ipv4[3];
-	FWPM_FILTER_CONDITION0 conditions_ipv6[2];
-	FWP_BYTE_BLOB blob_v4;
-	FWP_RANGE0 range_ipv4_a;
-	FWP_RANGE0 range_ipv4_b;
-	LPWSTR name_ipv4;
-	LPWSTR desc_ipv4;
-	int len;
-	FWP_BYTE_BLOB blob_v6;
-	FWP_BYTE_ARRAY16 ipv6_beg;
-	FWP_BYTE_ARRAY16 ipv6_end;
-	FWP_RANGE0 range_ipv6;
-	LPWSTR name_ipv6;
-	LPWSTR desc_ipv6;
-	DWORD st;
-
-	mk_assert(fw);
-	mk_assert(path_buf);
-	mk_assert(path_buf[path_len] == L'\0');
-	mk_assert(path_len >= 1);
-	mk_assert(gud);
-
-	*gud = false;
-	success = false;
-	mk_make_defer([&](){ *gud = success; });
-	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = FALSE;
-	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
-	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
-	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
-	mk_to_lower(&nt_path_buf[0], nt_path_len);
-	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
-
-	mk_memclr_c(&filter_ipv4, sizeof(filter_ipv4));
-	mk_memclr_c(&filter_ipv6, sizeof(filter_ipv6));
-	mk_memclr_c(&conditions_ipv4, sizeof(conditions_ipv4));
-	mk_memclr_c(&conditions_ipv6, sizeof(conditions_ipv6));
-
-	blob_v4.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
-	blob_v4.data = ((UINT8*)(&nt_path_buf[0]));
-	conditions_ipv4[0].fieldKey = *((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ALE_APP_ID]));
-	conditions_ipv4[0].matchType = FWP_MATCH_EQUAL;
-	conditions_ipv4[0].conditionValue.type = FWP_BYTE_BLOB_TYPE;
-	conditions_ipv4[0].conditionValue.byteBlob = &blob_v4;
-
-	/* 0.0.0.0 - 127.0.0.0 */
-	range_ipv4_a.valueLow.type = FWP_UINT32;
-	range_ipv4_a.valueLow.uint32 = ((UINT32)(0x00000000ul));
-	range_ipv4_a.valueHigh.type = FWP_UINT32;
-	range_ipv4_a.valueHigh.uint32 = ((UINT32)(0x7f000000ul));
-	conditions_ipv4[1].fieldKey = *((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS]));
-	conditions_ipv4[1].matchType = FWP_MATCH_RANGE;
-	conditions_ipv4[1].conditionValue.type = FWP_RANGE_TYPE;
-	conditions_ipv4[1].conditionValue.rangeValue = &range_ipv4_a;
-
-	/* 127.0.0.2 - 255.255.255.255 */
-	range_ipv4_b.valueLow.type = FWP_UINT32;
-	range_ipv4_b.valueLow.uint32 = ((UINT32)(0x7f000002ul));
-	range_ipv4_b.valueHigh.type = FWP_UINT32;
-	range_ipv4_b.valueHigh.uint32 = ((UINT32)(0xfffffffful));
-	conditions_ipv4[2].fieldKey = *((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS]));
-	conditions_ipv4[2].matchType = FWP_MATCH_RANGE;
-	conditions_ipv4[2].conditionValue.type = FWP_RANGE_TYPE;
-	conditions_ipv4[2].conditionValue.rangeValue = &range_ipv4_b;
-
-	name_ipv4 = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	desc_ipv4 = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name_ipv4, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc_ipv4, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	filter_ipv4.displayData.name = name_ipv4;
-	filter_ipv4.displayData.description = desc_ipv4;
-	filter_ipv4.providerKey = ((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_PROVIDER_MPSSVC_WF]));
-	filter_ipv4.layerKey = *((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V4]));
-	filter_ipv4.subLayerKey = *((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_SUBLAYER_MPSSVC_WF]));
-	filter_ipv4.action.type = FWP_ACTION_BLOCK;
-	filter_ipv4.numFilterConditions = 3;
-	filter_ipv4.filterCondition = &conditions_ipv4[0];
-	filter_ipv4.weight.type = FWP_UINT8;
-	filter_ipv4.weight.uint8 = 10;
-
-	blob_v6.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
-	blob_v6.data = ((UINT8*)(&nt_path_buf[0]));
-	conditions_ipv6[0].fieldKey = *((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_CONDITION_ALE_APP_ID]));
-	conditions_ipv6[0].matchType = FWP_MATCH_EQUAL;
-	conditions_ipv6[0].conditionValue.type = FWP_BYTE_BLOB_TYPE;
-	conditions_ipv6[0].conditionValue.byteBlob = &blob_v6;
-
-	ipv6_beg.byteArray16[ 0] = 0x00;
-	ipv6_beg.byteArray16[ 1] = 0x00;
-	ipv6_beg.byteArray16[ 2] = 0x00;
-	ipv6_beg.byteArray16[ 3] = 0x00;
-	ipv6_beg.byteArray16[ 4] = 0x00;
-	ipv6_beg.byteArray16[ 5] = 0x00;
-	ipv6_beg.byteArray16[ 6] = 0x00;
-	ipv6_beg.byteArray16[ 7] = 0x00;
-	ipv6_beg.byteArray16[ 8] = 0x00;
-	ipv6_beg.byteArray16[ 9] = 0x00;
-	ipv6_beg.byteArray16[10] = 0x00;
-	ipv6_beg.byteArray16[11] = 0x00;
-	ipv6_beg.byteArray16[12] = 0x00;
-	ipv6_beg.byteArray16[13] = 0x00;
-	ipv6_beg.byteArray16[14] = 0x00;
-	ipv6_beg.byteArray16[15] = 0x00;
-	ipv6_end.byteArray16[ 0] = 0xff;
-	ipv6_end.byteArray16[ 1] = 0xff;
-	ipv6_end.byteArray16[ 2] = 0xff;
-	ipv6_end.byteArray16[ 3] = 0xff;
-	ipv6_end.byteArray16[ 4] = 0xff;
-	ipv6_end.byteArray16[ 5] = 0xff;
-	ipv6_end.byteArray16[ 6] = 0xff;
-	ipv6_end.byteArray16[ 7] = 0xff;
-	ipv6_end.byteArray16[ 8] = 0xff;
-	ipv6_end.byteArray16[ 9] = 0xff;
-	ipv6_end.byteArray16[10] = 0xff;
-	ipv6_end.byteArray16[11] = 0xff;
-	ipv6_end.byteArray16[12] = 0xff;
-	ipv6_end.byteArray16[13] = 0xff;
-	ipv6_end.byteArray16[14] = 0xff;
-	ipv6_end.byteArray16[15] = 0xff;
-	range_ipv6.valueLow.type = FWP_BYTE_ARRAY16_TYPE;
-	range_ipv6.valueLow.byteArray16 = &ipv6_beg;
-	range_ipv6.valueHigh.type = FWP_BYTE_ARRAY16_TYPE;
-	range_ipv6.valueHigh.byteArray16 = &ipv6_end;
-	conditions_ipv6[1].fieldKey = *((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_CONDITION_IP_REMOTE_ADDRESS]));
-	conditions_ipv6[1].matchType = FWP_MATCH_RANGE;
-	conditions_ipv6[1].conditionValue.type = FWP_RANGE_TYPE;
-	conditions_ipv6[1].conditionValue.rangeValue = &range_ipv6;
-
-	name_ipv6 = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	desc_ipv6 = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name_ipv6, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc_ipv6, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	filter_ipv6.displayData.name = name_ipv6;
-	filter_ipv6.displayData.description = desc_ipv6;
-	filter_ipv6.providerKey = ((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_PROVIDER_MPSSVC_WF]));
-	filter_ipv6.layerKey = *((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_LAYER_ALE_AUTH_CONNECT_V6]));
-	filter_ipv6.subLayerKey = *((GUID*)(&k_konst.m_guids.m_guids[guid_id_e_FWPM_SUBLAYER_MPSSVC_WF]));
-	filter_ipv6.action.type = FWP_ACTION_BLOCK;
-	filter_ipv6.numFilterConditions = 2;
-	filter_ipv6.filterCondition = &conditions_ipv6[0];
-	filter_ipv6.weight.type = FWP_UINT8;
-	filter_ipv6.weight.uint8 = 10;
-
-	success = false;
-	st = g_app.m_funcs_fw.m_pfn_FwpmTransactionBegin0(fw->m_eng, 0); if(st != ERROR_SUCCESS){ return; }
-	mk_make_defer([&](){ DWORD st; if(!success){ st = g_app.m_funcs_fw.m_pfn_FwpmTransactionAbort0(fw->m_eng); ((void)(st)); } });
-	st = g_app.m_funcs_fw.m_pfn_FwpmFilterAdd0(fw->m_eng, &filter_ipv4, NULL, NULL); if(st != ERROR_SUCCESS){ return; }
-	st = g_app.m_funcs_fw.m_pfn_FwpmFilterAdd0(fw->m_eng, &filter_ipv6, NULL, NULL); if(st != ERROR_SUCCESS){ return; }
 	st = g_app.m_funcs_fw.m_pfn_FwpmTransactionCommit0(fw->m_eng); if(st != ERROR_SUCCESS){ return; }
 	success = true;
 }
