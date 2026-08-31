@@ -3912,13 +3912,9 @@ static inline void mkfw_get_file_paths(mk_fw_t* const fw, LPCWSTR const path_buf
 	success = true;
 }
 
-static inline void mkfw_block_exe_inbound_ipv4_listen_permit(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
+static inline void mkfw_block_exe_inbound_ipv4_listen_permit(mk_fw_t* const fw, LPCWSTR const path_buf, DWORD const path_len, LPCWSTR const nt_path_buf, DWORD const nt_path_len, LPCWSTR const exe_name, bool* const gud)
 {
 	bool success;
-	bool well;
-	LPCWSTR nt_path_buf;
-	DWORD nt_path_len;
-	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[1];
 	FWP_BYTE_BLOB blob;
 	FWPM_FILTER_CONDITION0* condition;
@@ -3930,15 +3926,19 @@ static inline void mkfw_block_exe_inbound_ipv4_listen_permit(mk_fw_t* const fw, 
 
 	mk_assert(fw);
 	mk_assert(path_buf);
-	mk_assert(path_buf[path_len] == L'\0');
+	mk_assert(path_buf[nt_path_len] == L'\0');
 	mk_assert(path_len >= 1);
+	mk_assert(nt_path_buf);
+	mk_assert(nt_path_buf[nt_path_len] == L'\0');
+	mk_assert(nt_path_len >= 1);
+	mk_assert(exe_name);
+	mk_assert(exe_name[0] != L'\0');
 	mk_assert(gud);
 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
 
-	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -3970,13 +3970,9 @@ static inline void mkfw_block_exe_inbound_ipv4_listen_permit(mk_fw_t* const fw, 
 	success = true;
 }
 
-static inline void mkfw_block_exe_inbound_ipv6_listen_permit(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
+static inline void mkfw_block_exe_inbound_ipv6_listen_permit(mk_fw_t* const fw, LPCWSTR const path_buf, DWORD const path_len, LPCWSTR const nt_path_buf, DWORD const nt_path_len, LPCWSTR const exe_name, bool* const gud)
 {
 	bool success;
-	bool well;
-	LPCWSTR nt_path_buf;
-	DWORD nt_path_len;
-	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[1];
 	FWP_BYTE_BLOB blob;
 	FWPM_FILTER_CONDITION0* condition;
@@ -3988,15 +3984,19 @@ static inline void mkfw_block_exe_inbound_ipv6_listen_permit(mk_fw_t* const fw, 
 
 	mk_assert(fw);
 	mk_assert(path_buf);
-	mk_assert(path_buf[path_len] == L'\0');
+	mk_assert(path_buf[nt_path_len] == L'\0');
 	mk_assert(path_len >= 1);
+	mk_assert(nt_path_buf);
+	mk_assert(nt_path_buf[nt_path_len] == L'\0');
+	mk_assert(nt_path_len >= 1);
+	mk_assert(exe_name);
+	mk_assert(exe_name[0] != L'\0');
 	mk_assert(gud);
 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
 
-	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4028,13 +4028,9 @@ static inline void mkfw_block_exe_inbound_ipv6_listen_permit(mk_fw_t* const fw, 
 	success = true;
 }
 
-static inline void mkfw_block_exe_inbound_ipv4_udp_permit(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
+static inline void mkfw_block_exe_inbound_ipv4_udp_permit(mk_fw_t* const fw, LPCWSTR const path_buf, DWORD const path_len, LPCWSTR const nt_path_buf, DWORD const nt_path_len, LPCWSTR const exe_name, bool* const gud)
 {
 	bool success;
-	bool well;
-	LPCWSTR nt_path_buf;
-	DWORD nt_path_len;
-	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
 	FWP_BYTE_BLOB blob;
 	FWPM_FILTER_CONDITION0* condition;
@@ -4046,15 +4042,19 @@ static inline void mkfw_block_exe_inbound_ipv4_udp_permit(mk_fw_t* const fw, LPC
 
 	mk_assert(fw);
 	mk_assert(path_buf);
-	mk_assert(path_buf[path_len] == L'\0');
+	mk_assert(path_buf[nt_path_len] == L'\0');
 	mk_assert(path_len >= 1);
+	mk_assert(nt_path_buf);
+	mk_assert(nt_path_buf[nt_path_len] == L'\0');
+	mk_assert(nt_path_len >= 1);
+	mk_assert(exe_name);
+	mk_assert(exe_name[0] != L'\0');
 	mk_assert(gud);
 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
 
-	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4092,13 +4092,9 @@ static inline void mkfw_block_exe_inbound_ipv4_udp_permit(mk_fw_t* const fw, LPC
 	success = true;
 }
 
-static inline void mkfw_block_exe_inbound_ipv6_udp_permit(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
+static inline void mkfw_block_exe_inbound_ipv6_udp_permit(mk_fw_t* const fw, LPCWSTR const path_buf, DWORD const path_len, LPCWSTR const nt_path_buf, DWORD const nt_path_len, LPCWSTR const exe_name, bool* const gud)
 {
 	bool success;
-	bool well;
-	LPCWSTR nt_path_buf;
-	DWORD nt_path_len;
-	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
 	FWP_BYTE_BLOB blob;
 	FWPM_FILTER_CONDITION0* condition;
@@ -4110,15 +4106,19 @@ static inline void mkfw_block_exe_inbound_ipv6_udp_permit(mk_fw_t* const fw, LPC
 
 	mk_assert(fw);
 	mk_assert(path_buf);
-	mk_assert(path_buf[path_len] == L'\0');
+	mk_assert(path_buf[nt_path_len] == L'\0');
 	mk_assert(path_len >= 1);
+	mk_assert(nt_path_buf);
+	mk_assert(nt_path_buf[nt_path_len] == L'\0');
+	mk_assert(nt_path_len >= 1);
+	mk_assert(exe_name);
+	mk_assert(exe_name[0] != L'\0');
 	mk_assert(gud);
 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
 
-	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4156,13 +4156,9 @@ static inline void mkfw_block_exe_inbound_ipv6_udp_permit(mk_fw_t* const fw, LPC
 	success = true;
 }
 
-static inline void mkfw_block_exe_inbound_ipv4_accept_block(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
+static inline void mkfw_block_exe_inbound_ipv4_accept_block(mk_fw_t* const fw, LPCWSTR const path_buf, DWORD const path_len, LPCWSTR const nt_path_buf, DWORD const nt_path_len, LPCWSTR const exe_name, bool* const gud)
 {
 	bool success;
-	bool well;
-	LPCWSTR nt_path_buf;
-	DWORD nt_path_len;
-	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
 	FWP_BYTE_BLOB blob;
 	FWPM_FILTER_CONDITION0* condition;
@@ -4175,15 +4171,19 @@ static inline void mkfw_block_exe_inbound_ipv4_accept_block(mk_fw_t* const fw, L
 
 	mk_assert(fw);
 	mk_assert(path_buf);
-	mk_assert(path_buf[path_len] == L'\0');
+	mk_assert(path_buf[nt_path_len] == L'\0');
 	mk_assert(path_len >= 1);
+	mk_assert(nt_path_buf);
+	mk_assert(nt_path_buf[nt_path_len] == L'\0');
+	mk_assert(nt_path_len >= 1);
+	mk_assert(exe_name);
+	mk_assert(exe_name[0] != L'\0');
 	mk_assert(gud);
 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
 
-	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4225,13 +4225,9 @@ static inline void mkfw_block_exe_inbound_ipv4_accept_block(mk_fw_t* const fw, L
 	success = true;
 }
 
-static inline void mkfw_block_exe_inbound_ipv6_accept_block(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
+static inline void mkfw_block_exe_inbound_ipv6_accept_block(mk_fw_t* const fw, LPCWSTR const path_buf, DWORD const path_len, LPCWSTR const nt_path_buf, DWORD const nt_path_len, LPCWSTR const exe_name, bool* const gud)
 {
 	bool success;
-	bool well;
-	LPCWSTR nt_path_buf;
-	DWORD nt_path_len;
-	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
 	FWP_BYTE_BLOB blob;
 	FWPM_FILTER_CONDITION0* condition;
@@ -4246,15 +4242,19 @@ static inline void mkfw_block_exe_inbound_ipv6_accept_block(mk_fw_t* const fw, L
 
 	mk_assert(fw);
 	mk_assert(path_buf);
-	mk_assert(path_buf[path_len] == L'\0');
+	mk_assert(path_buf[nt_path_len] == L'\0');
 	mk_assert(path_len >= 1);
+	mk_assert(nt_path_buf);
+	mk_assert(nt_path_buf[nt_path_len] == L'\0');
+	mk_assert(nt_path_len >= 1);
+	mk_assert(exe_name);
+	mk_assert(exe_name[0] != L'\0');
 	mk_assert(gud);
 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
 
-	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4328,13 +4328,9 @@ static inline void mkfw_block_exe_inbound_ipv6_accept_block(mk_fw_t* const fw, L
 	success = true;
 }
 
-static inline void mkfw_block_exe_outbound_ipv4_connect_block(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
+static inline void mkfw_block_exe_outbound_ipv4_connect_block(mk_fw_t* const fw, LPCWSTR const path_buf, DWORD const path_len, LPCWSTR const nt_path_buf, DWORD const nt_path_len, LPCWSTR const exe_name, bool* const gud)
 {
 	bool success;
-	bool well;
-	LPCWSTR nt_path_buf;
-	DWORD nt_path_len;
-	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[3];
 	FWP_BYTE_BLOB blob;
 	FWPM_FILTER_CONDITION0* condition;
@@ -4348,15 +4344,19 @@ static inline void mkfw_block_exe_outbound_ipv4_connect_block(mk_fw_t* const fw,
 
 	mk_assert(fw);
 	mk_assert(path_buf);
-	mk_assert(path_buf[path_len] == L'\0');
+	mk_assert(path_buf[nt_path_len] == L'\0');
 	mk_assert(path_len >= 1);
+	mk_assert(nt_path_buf);
+	mk_assert(nt_path_buf[nt_path_len] == L'\0');
+	mk_assert(nt_path_len >= 1);
+	mk_assert(exe_name);
+	mk_assert(exe_name[0] != L'\0');
 	mk_assert(gud);
 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
 
-	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4410,13 +4410,9 @@ static inline void mkfw_block_exe_outbound_ipv4_connect_block(mk_fw_t* const fw,
 	success = true;
 }
 
-static inline void mkfw_block_exe_outbound_ipv6_connect_block(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
+static inline void mkfw_block_exe_outbound_ipv6_connect_block(mk_fw_t* const fw, LPCWSTR const path_buf, DWORD const path_len, LPCWSTR const nt_path_buf, DWORD const nt_path_len, LPCWSTR const exe_name, bool* const gud)
 {
 	bool success;
-	bool well;
-	LPCWSTR nt_path_buf;
-	DWORD nt_path_len;
-	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
 	FWP_BYTE_BLOB blob;
 	FWPM_FILTER_CONDITION0* condition;
@@ -4431,15 +4427,19 @@ static inline void mkfw_block_exe_outbound_ipv6_connect_block(mk_fw_t* const fw,
 
 	mk_assert(fw);
 	mk_assert(path_buf);
-	mk_assert(path_buf[path_len] == L'\0');
+	mk_assert(path_buf[nt_path_len] == L'\0');
 	mk_assert(path_len >= 1);
+	mk_assert(nt_path_buf);
+	mk_assert(nt_path_buf[nt_path_len] == L'\0');
+	mk_assert(nt_path_len >= 1);
+	mk_assert(exe_name);
+	mk_assert(exe_name[0] != L'\0');
 	mk_assert(gud);
 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
 
-	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4517,6 +4517,10 @@ static inline void mkfw_block_exe_all(mk_fw_t* const fw, LPCWSTR const path_buf,
 {
 	bool success;
 	DWORD st;
+	bool well;
+	LPCWSTR nt_path_buf;
+	DWORD nt_path_len;
+	LPCWSTR exe_name;
 
 	mk_assert(fw);
 	mk_assert(path_buf);
@@ -4531,14 +4535,16 @@ static inline void mkfw_block_exe_all(mk_fw_t* const fw, LPCWSTR const path_buf,
 	st = g_app.m_funcs_fw.m_pfn_FwpmTransactionBegin0(fw->m_eng, 0); if(st != ERROR_SUCCESS){ return; }
 	mk_make_defer([&](){ DWORD st; if(!success){ st = g_app.m_funcs_fw.m_pfn_FwpmTransactionAbort0(fw->m_eng); ((void)(st)); } });
 
-	mkfw_block_exe_inbound_ipv4_listen_permit (fw, path_buf, path_len, &success); if(!success){ return; }
-	mkfw_block_exe_inbound_ipv6_listen_permit (fw, path_buf, path_len, &success); if(!success){ return; }
-	mkfw_block_exe_inbound_ipv4_udp_permit    (fw, path_buf, path_len, &success); if(!success){ return; }
-	mkfw_block_exe_inbound_ipv6_udp_permit    (fw, path_buf, path_len, &success); if(!success){ return; }
-	mkfw_block_exe_inbound_ipv4_accept_block  (fw, path_buf, path_len, &success); if(!success){ return; }
-	mkfw_block_exe_inbound_ipv6_accept_block  (fw, path_buf, path_len, &success); if(!success){ return; }
-	mkfw_block_exe_outbound_ipv4_connect_block(fw, path_buf, path_len, &success); if(!success){ return; }
-	mkfw_block_exe_outbound_ipv6_connect_block(fw, path_buf, path_len, &success); if(!success){ return; }
+	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
+
+	mkfw_block_exe_inbound_ipv4_listen_permit (fw, path_buf, path_len, nt_path_buf, nt_path_len, exe_name, &well); if(!well){ return; }
+	mkfw_block_exe_inbound_ipv6_listen_permit (fw, path_buf, path_len, nt_path_buf, nt_path_len, exe_name, &well); if(!well){ return; }
+	mkfw_block_exe_inbound_ipv4_udp_permit    (fw, path_buf, path_len, nt_path_buf, nt_path_len, exe_name, &well); if(!well){ return; }
+	mkfw_block_exe_inbound_ipv6_udp_permit    (fw, path_buf, path_len, nt_path_buf, nt_path_len, exe_name, &well); if(!well){ return; }
+	mkfw_block_exe_inbound_ipv4_accept_block  (fw, path_buf, path_len, nt_path_buf, nt_path_len, exe_name, &well); if(!well){ return; }
+	mkfw_block_exe_inbound_ipv6_accept_block  (fw, path_buf, path_len, nt_path_buf, nt_path_len, exe_name, &well); if(!well){ return; }
+	mkfw_block_exe_outbound_ipv4_connect_block(fw, path_buf, path_len, nt_path_buf, nt_path_len, exe_name, &well); if(!well){ return; }
+	mkfw_block_exe_outbound_ipv6_connect_block(fw, path_buf, path_len, nt_path_buf, nt_path_len, exe_name, &well); if(!well){ return; }
 
 	st = g_app.m_funcs_fw.m_pfn_FwpmTransactionCommit0(fw->m_eng); if(st != ERROR_SUCCESS){ return; }
 	success = true;
