@@ -3392,6 +3392,28 @@ static inline void mkfw_wnd_on_rclick(mk_wnd_t* const self, HWND const list_view
 	}
 }
 
+static inline void mkfw_re_click_entry(mk_wnd_t* self)
+{
+	HWND list_view;
+	LRESULT lr;
+	int selected_idx;
+	LVITEMW item;
+
+	mk_assert(self);
+
+	list_view = self->m_entries;
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(list_view, LVM_GETSELECTIONMARK, 0, 0); selected_idx = ((int)(lr));
+	if(!(selected_idx >= 0 && selected_idx < ((int)(self->m_fw->m_count)))){ return; }
+	item.mask = LVIF_STATE;
+	item.stateMask = LVIS_FOCUSED | LVIS_SELECTED;
+	item.state = 0;
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(list_view, LVM_SETITEMSTATE, ((WPARAM)(selected_idx)), ((LPARAM)(&item)));
+	item.mask = LVIF_STATE;
+	item.stateMask = LVIS_FOCUSED | LVIS_SELECTED;
+	item.state = LVIS_FOCUSED | LVIS_SELECTED;
+	lr = g_app.m_funcs_user.m_pfn_SendMessageW(list_view, LVM_SETITEMSTATE, ((WPARAM)(selected_idx)), ((LPARAM)(&item)));
+}
+
 static inline void mkfw_wnd_refresh(mk_wnd_t* self)
 {
 	DWORD dw;
@@ -3427,6 +3449,7 @@ static inline void mkfw_wnd_refresh(mk_wnd_t* self)
 	b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_entries, NULL, TRUE); mk_assert(b);
 	b = g_app.m_funcs_user.m_pfn_InvalidateRect(self->m_conditions, NULL, TRUE); mk_assert(b);
 	mkfw_wnd_sort_entries(self);
+	mkfw_re_click_entry(self);
 }
 
 static inline void mk_fw_copy_cell(mk_wnd_t* const self)
