@@ -3915,10 +3915,8 @@ static inline void mkfw_get_file_paths(mk_fw_t* const fw, LPCWSTR const path_buf
 static inline void mkfw_block_exe_inbound_ipv4_listen_permit(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
 	bool success;
-	SECURITY_ATTRIBUTES sa;
-	HANDLE hfile;
-	LPWSTR nt_path_buf;
-	int nt_path_cap;
+	bool well;
+	LPCWSTR nt_path_buf;
 	DWORD nt_path_len;
 	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[1];
@@ -3939,19 +3937,8 @@ static inline void mkfw_block_exe_inbound_ipv4_listen_permit(mk_fw_t* const fw, 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
-	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = FALSE;
-	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
-	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
-	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
-	mk_to_lower(&nt_path_buf[0], nt_path_len);
-	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
+	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -3964,8 +3951,8 @@ static inline void mkfw_block_exe_inbound_ipv4_listen_permit(mk_fw_t* const fw, 
 
 	name = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
 	mk_memclr_c(&filter, sizeof(filter));
 	filter.displayData.name = name;
 	filter.displayData.description = desc;
@@ -3986,10 +3973,8 @@ static inline void mkfw_block_exe_inbound_ipv4_listen_permit(mk_fw_t* const fw, 
 static inline void mkfw_block_exe_inbound_ipv6_listen_permit(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
 	bool success;
-	SECURITY_ATTRIBUTES sa;
-	HANDLE hfile;
-	LPWSTR nt_path_buf;
-	int nt_path_cap;
+	bool well;
+	LPCWSTR nt_path_buf;
 	DWORD nt_path_len;
 	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[1];
@@ -4010,19 +3995,8 @@ static inline void mkfw_block_exe_inbound_ipv6_listen_permit(mk_fw_t* const fw, 
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
-	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = FALSE;
-	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
-	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
-	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
-	mk_to_lower(&nt_path_buf[0], nt_path_len);
-	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
+	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4035,8 +4009,8 @@ static inline void mkfw_block_exe_inbound_ipv6_listen_permit(mk_fw_t* const fw, 
 
 	name = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
 	mk_memclr_c(&filter, sizeof(filter));
 	filter.displayData.name = name;
 	filter.displayData.description = desc;
@@ -4057,10 +4031,8 @@ static inline void mkfw_block_exe_inbound_ipv6_listen_permit(mk_fw_t* const fw, 
 static inline void mkfw_block_exe_inbound_ipv4_udp_permit(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
 	bool success;
-	SECURITY_ATTRIBUTES sa;
-	HANDLE hfile;
-	LPWSTR nt_path_buf;
-	int nt_path_cap;
+	bool well;
+	LPCWSTR nt_path_buf;
 	DWORD nt_path_len;
 	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
@@ -4081,19 +4053,8 @@ static inline void mkfw_block_exe_inbound_ipv4_udp_permit(mk_fw_t* const fw, LPC
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
-	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = FALSE;
-	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
-	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
-	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
-	mk_to_lower(&nt_path_buf[0], nt_path_len);
-	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
+	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4112,8 +4073,8 @@ static inline void mkfw_block_exe_inbound_ipv4_udp_permit(mk_fw_t* const fw, LPC
 
 	name = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
 	mk_memclr_c(&filter, sizeof(filter));
 	filter.displayData.name = name;
 	filter.displayData.description = desc;
@@ -4134,10 +4095,8 @@ static inline void mkfw_block_exe_inbound_ipv4_udp_permit(mk_fw_t* const fw, LPC
 static inline void mkfw_block_exe_inbound_ipv6_udp_permit(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
 	bool success;
-	SECURITY_ATTRIBUTES sa;
-	HANDLE hfile;
-	LPWSTR nt_path_buf;
-	int nt_path_cap;
+	bool well;
+	LPCWSTR nt_path_buf;
 	DWORD nt_path_len;
 	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
@@ -4158,19 +4117,8 @@ static inline void mkfw_block_exe_inbound_ipv6_udp_permit(mk_fw_t* const fw, LPC
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
-	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = FALSE;
-	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
-	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
-	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
-	mk_to_lower(&nt_path_buf[0], nt_path_len);
-	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
+	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4189,8 +4137,8 @@ static inline void mkfw_block_exe_inbound_ipv6_udp_permit(mk_fw_t* const fw, LPC
 
 	name = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
 	mk_memclr_c(&filter, sizeof(filter));
 	filter.displayData.name = name;
 	filter.displayData.description = desc;
@@ -4211,10 +4159,8 @@ static inline void mkfw_block_exe_inbound_ipv6_udp_permit(mk_fw_t* const fw, LPC
 static inline void mkfw_block_exe_inbound_ipv4_accept_block(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
 	bool success;
-	SECURITY_ATTRIBUTES sa;
-	HANDLE hfile;
-	LPWSTR nt_path_buf;
-	int nt_path_cap;
+	bool well;
+	LPCWSTR nt_path_buf;
 	DWORD nt_path_len;
 	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
@@ -4236,19 +4182,8 @@ static inline void mkfw_block_exe_inbound_ipv4_accept_block(mk_fw_t* const fw, L
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
-	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = FALSE;
-	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
-	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
-	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
-	mk_to_lower(&nt_path_buf[0], nt_path_len);
-	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
+	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4271,8 +4206,8 @@ static inline void mkfw_block_exe_inbound_ipv4_accept_block(mk_fw_t* const fw, L
 
 	name = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
 	mk_memclr_c(&filter, sizeof(filter));
 	filter.displayData.name = name;
 	filter.displayData.description = desc;
@@ -4293,10 +4228,8 @@ static inline void mkfw_block_exe_inbound_ipv4_accept_block(mk_fw_t* const fw, L
 static inline void mkfw_block_exe_inbound_ipv6_accept_block(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
 	bool success;
-	SECURITY_ATTRIBUTES sa;
-	HANDLE hfile;
-	LPWSTR nt_path_buf;
-	int nt_path_cap;
+	bool well;
+	LPCWSTR nt_path_buf;
 	DWORD nt_path_len;
 	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
@@ -4320,19 +4253,8 @@ static inline void mkfw_block_exe_inbound_ipv6_accept_block(mk_fw_t* const fw, L
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
-	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = FALSE;
-	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
-	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
-	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
-	mk_to_lower(&nt_path_buf[0], nt_path_len);
-	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
+	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4387,8 +4309,8 @@ static inline void mkfw_block_exe_inbound_ipv6_accept_block(mk_fw_t* const fw, L
 
 	name = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_inbound_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
 	mk_memclr_c(&filter, sizeof(filter));
 	filter.displayData.name = name;
 	filter.displayData.description = desc;
@@ -4409,10 +4331,8 @@ static inline void mkfw_block_exe_inbound_ipv6_accept_block(mk_fw_t* const fw, L
 static inline void mkfw_block_exe_outbound_ipv4_connect_block(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
 	bool success;
-	SECURITY_ATTRIBUTES sa;
-	HANDLE hfile;
-	LPWSTR nt_path_buf;
-	int nt_path_cap;
+	bool well;
+	LPCWSTR nt_path_buf;
 	DWORD nt_path_len;
 	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[3];
@@ -4435,19 +4355,8 @@ static inline void mkfw_block_exe_outbound_ipv4_connect_block(mk_fw_t* const fw,
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
-	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = FALSE;
-	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
-	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
-	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
-	mk_to_lower(&nt_path_buf[0], nt_path_len);
-	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
+	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4482,8 +4391,8 @@ static inline void mkfw_block_exe_outbound_ipv4_connect_block(mk_fw_t* const fw,
 
 	name = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_outbound_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_outbound_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_outbound_ipv4_name)).m_buf, exe_name); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_outbound_ipv4_desc)).m_buf, path_buf); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
 	mk_memclr_c(&filter, sizeof(filter));
 	filter.displayData.name = name;
 	filter.displayData.description = desc;
@@ -4504,10 +4413,8 @@ static inline void mkfw_block_exe_outbound_ipv4_connect_block(mk_fw_t* const fw,
 static inline void mkfw_block_exe_outbound_ipv6_connect_block(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
 	bool success;
-	SECURITY_ATTRIBUTES sa;
-	HANDLE hfile;
-	LPWSTR nt_path_buf;
-	int nt_path_cap;
+	bool well;
+	LPCWSTR nt_path_buf;
 	DWORD nt_path_len;
 	LPCWSTR exe_name;
 	FWPM_FILTER_CONDITION0 conditions[2];
@@ -4531,19 +4438,8 @@ static inline void mkfw_block_exe_outbound_ipv6_connect_block(mk_fw_t* const fw,
 	*gud = false;
 	success = false;
 	mk_make_defer([&](){ *gud = success; });
-	sa.nLength = sizeof(sa);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = FALSE;
-	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if(hfile == INVALID_HANDLE_VALUE){ return; }
-	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
-	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
-	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
-	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
-	mk_to_lower(&nt_path_buf[0], nt_path_len);
-	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
 
+	mkfw_get_file_paths(fw, path_buf, path_len, &well, &nt_path_buf, &nt_path_len, &exe_name); if(!well){ return; }
 	mk_memclr_c(&conditions, sizeof(conditions));
 
 	blob.size = (nt_path_len + 1) * sizeof(nt_path_buf[0]);
@@ -4598,8 +4494,8 @@ static inline void mkfw_block_exe_outbound_ipv6_connect_block(mk_fw_t* const fw,
 
 	name = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
 	desc = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_outbound_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < nt_path_cap)){ return; }
-	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_outbound_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < nt_path_cap)){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(name, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_outbound_ipv6_name)).m_buf, exe_name); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
+	len = g_app.m_funcs_ntdll.m_pfn_swprintf(desc, nstr_to_wstr(k_konst.m_strings.get_nstr(k_konst.m_strings.string_id::id_fmt_block_outbound_ipv6_desc)).m_buf, path_buf); if(!(len >= 1 && len < _countof(g_app.m_tmp_wstrs[0]))){ return; }
 	mk_memclr_c(&filter, sizeof(filter));
 	filter.displayData.name = name;
 	filter.displayData.description = desc;
