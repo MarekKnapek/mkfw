@@ -3871,6 +3871,47 @@ static inline void mk_last_slash(LPCWSTR const buf, int const len, LPCWSTR* cons
 	}
 }
 
+static inline void mkfw_get_file_paths(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud, LPCWSTR* const out_path_buf, LPDWORD const out_path_len, LPCWSTR* const out_exe_name)
+{
+	bool success;
+	SECURITY_ATTRIBUTES sa;
+	HANDLE hfile;
+	LPWSTR nt_path_buf;
+	int nt_path_cap;
+	DWORD nt_path_len;
+	LPCWSTR exe_name;
+
+	mk_assert(fw);
+	mk_assert(path_buf);
+	mk_assert(path_buf[path_len] == L'\0');
+	mk_assert(path_len >= 1);
+	mk_assert(gud);
+	mk_assert(out_path_buf);
+	mk_assert(out_path_len);
+	mk_assert(out_exe_name);
+
+	*gud = false;
+	success = false;
+	mk_make_defer([&](){ *gud = success; });
+	sa.nLength = sizeof(sa);
+	sa.lpSecurityDescriptor = NULL;
+	sa.bInheritHandle = FALSE;
+	hfile = g_app.m_funcs_kernel.m_pfn_CreateFileW(path_buf, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if(hfile == INVALID_HANDLE_VALUE){ return; }
+	mk_make_defer([&](){ BOOL b; b = g_app.m_funcs_kernel.m_pfn_CloseHandle(hfile); mk_assert(b); });
+	nt_path_buf = &g_app.m_tmp_wstrs[g_app.m_tmps_wstr_idx++ % _countof(g_app.m_tmp_wstrs)][0];
+	nt_path_cap = _countof(g_app.m_tmp_wstrs[0]);
+	nt_path_len = g_app.m_funcs_kernel.m_pfn_GetFinalPathNameByHandleW(hfile, &nt_path_buf[0], nt_path_cap, FILE_NAME_NORMALIZED  | VOLUME_NAME_NT);
+	if(nt_path_len == 0 || ((int)(nt_path_len)) >= nt_path_cap){ return; }
+	mk_to_lower(&nt_path_buf[0], nt_path_len);
+	mk_last_slash(&path_buf[0], path_len, &exe_name); if(!exe_name){ return; }
+
+	*out_path_buf = nt_path_buf;
+	*out_path_len = nt_path_len;
+	*out_exe_name = exe_name;
+	success = true;
+}
+
 static inline void mkfw_block_exe_inbound_ipv4_listen_permit(mk_fw_t* const fw, LPCWSTR const path_buf, int const path_len, bool* const gud)
 {
 	bool success;
